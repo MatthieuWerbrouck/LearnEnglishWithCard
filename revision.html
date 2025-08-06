@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Révision par thème</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h2>Choisis un thème</h2>
+    <div class="theme-list" id="themeList"></div>
+    <div id="flashcardSection" style="display:none;">
+      <div class="flashcard-container">
+        <div class="flashcard" id="flashcard">
+          <div class="flashcard-face front" id="cardFront"></div>
+          <div class="flashcard-face back" id="cardBack"></div>
+        </div>
+      </div>
+      <button id="prevBtn" class="nav-btn">Précédent</button>
+      <button id="nextBtn" class="nav-btn">Suivant</button>
+    </div>
+    <button class="nav-btn" onclick="window.location.href='index.html'">Retour</button>
+  </div>
+  <script src="revision.js"></script>
+</body>
+</html>
