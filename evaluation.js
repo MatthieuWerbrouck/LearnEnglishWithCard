@@ -1,15 +1,25 @@
 
-// =============================
-// 1. Définition des cartes de vocabulaire (anglais/français)
-// =============================
-const allCards = [
-  { en: "cat", fr: "chat" },
-  { en: "dog", fr: "chien" },
-  { en: "bird", fr: "oiseau" },
-  { en: "apple", fr: "pomme" },
-  { en: "bread", fr: "pain" },
-  { en: "cheese", fr: "fromage" }
-];
+
+// Récupère toutes les cartes de tous les thèmes (localStorage ou défaut)
+function getAllCards() {
+  const local = localStorage.getItem('themes');
+  let all = [];
+  if (local) {
+    const obj = JSON.parse(local);
+    Object.values(obj).forEach(arr => all = all.concat(arr));
+    return all;
+  }
+  // défaut
+  return [
+    { en: "cat", fr: "chat" },
+    { en: "dog", fr: "chien" },
+    { en: "bird", fr: "oiseau" },
+    { en: "apple", fr: "pomme" },
+    { en: "bread", fr: "pain" },
+    { en: "cheese", fr: "fromage" }
+  ];
+}
+let allCards = getAllCards();
 
 
 // =============================
@@ -47,6 +57,9 @@ const nextBtn = document.getElementById('nextBtn');     // Bouton "carte suivant
 // 5. Affiche la carte courante et génère les réponses aléatoires
 // =============================
 function showCard() {
+  // Recharge les cartes à chaque question pour inclure les ajouts
+  allCards = getAllCards();
+  cards = cards.length === allCards.length ? cards : [...allCards];
   // Affiche le mot anglais sur la "carte"
   const card = cards[currentIndex];
   cardFront.textContent = card.en;

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ajouter un thème ou une carte</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h2>Ajouter un thème ou une carte</h2>
+    <form id="addCardForm" style="max-width:400px;margin:0 auto;text-align:left;">
+      <div class="form-group">
+        <label for="themeSelect">Thème :</label>
+        <select id="themeSelect" class="form-input"></select>
+        <input type="text" id="newTheme" class="form-input" placeholder="Ou nouveau thème" />
+      </div>
+      <div class="form-group">
+        <label for="enWord">Mot anglais :</label>
+        <input type="text" id="enWord" class="form-input" required />
+      </div>
+      <div class="form-group">
+        <label for="frWord">Traduction française :</label>
+        <input type="text" id="frWord" class="form-input" required />
+      </div>
+      <button type="submit" class="menu-btn" style="width:100%;margin-top:18px;">Ajouter la carte</button>
+    </form>
+    <div id="addMsg" style="margin-top:18px;"></div>
+    <button class="nav-btn" onclick="window.location.href='index.html'">Retour</button>
+  </div>
+  <script src="ajout.js"></script>
+</body>
+</html>

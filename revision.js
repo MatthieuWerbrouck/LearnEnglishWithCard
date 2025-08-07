@@ -1,16 +1,22 @@
-// Thèmes et cartes exemple
-const themes = {
-  "Animaux": [
-    { en: "cat", fr: "chat" },
-    { en: "dog", fr: "chien" },
-    { en: "bird", fr: "oiseau" }
-  ],
-  "Nourriture": [
-    { en: "apple", fr: "pomme" },
-    { en: "bread", fr: "pain" },
-    { en: "cheese", fr: "fromage" }
-  ]
-};
+
+// Récupère les thèmes depuis le localStorage ou valeurs par défaut
+function getThemes() {
+  const local = localStorage.getItem('themes');
+  if (local) return JSON.parse(local);
+  return {
+    "Animaux": [
+      { en: "cat", fr: "chat" },
+      { en: "dog", fr: "chien" },
+      { en: "bird", fr: "oiseau" }
+    ],
+    "Nourriture": [
+      { en: "apple", fr: "pomme" },
+      { en: "bread", fr: "pain" },
+      { en: "cheese", fr: "fromage" }
+    ]
+  };
+}
+let themes = getThemes();
 
 const themeList = document.getElementById('themeList');
 const flashcardSection = document.getElementById('flashcardSection');
@@ -28,6 +34,7 @@ let flipped = false;
 let flipTimeout = null;
 
 function showThemes() {
+  themes = getThemes();
   themeList.innerHTML = '';
   Object.keys(themes).forEach(theme => {
     const btn = document.createElement('button');
