@@ -8,16 +8,16 @@
 </head>
 <body>
   <div class="container">
-    <h2>Évaluation aléatoire</h2>
-    <div class="flashcard-container">
-      <div class="flashcard" id="flashcard" style="cursor:default;">
-        <div class="flashcard-face front" id="cardFront"></div>
-      </div>
+    <h1 style="margin-bottom:24px;">Évaluation par thème(s)</h1>
+    <div id="themeSelect" style="margin-bottom:24px;"></div>
+    <button id="startBtn" class="main-btn" style="display:none;margin-bottom:32px;">Démarrer l'évaluation</button>
+    <div id="flashcardSection" style="display:none">
+      <div id="flashcard" class="flashcard" style="margin-bottom:24px;"><div id="cardFront" class="card-front"></div></div>
+      <div id="answers" class="answers"></div>
+      <div id="feedback" class="feedback" style="margin-top:16px;"></div>
+      <button id="nextBtn" class="main-btn" style="display:none;margin-top:24px;">Carte suivante</button>
     </div>
-    <div id="answers" class="answers-container"></div>
-    <div id="feedback" style="margin:16px;font-weight:bold;"></div>
-    <button id="nextBtn" style="display:none;">Carte suivante</button>
-    <button onclick="window.location.href='index.html'">Retour</button>
+    <button onclick="window.location.href='index.html'" class="main-btn" style="margin-top:32px;">Retour</button>
   </div>
   <script src="evaluation.js"></script>
 </body>

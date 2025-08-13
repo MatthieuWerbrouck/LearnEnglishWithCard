@@ -1,22 +1,16 @@
 
-// Récupère les thèmes depuis le localStorage ou valeurs par défaut
-function getThemes() {
-  const local = localStorage.getItem('themes');
-  if (local) return JSON.parse(local);
-  return {
-    "Animaux": [
-      { en: "cat", fr: "chat" },
-      { en: "dog", fr: "chien" },
-      { en: "bird", fr: "oiseau" }
-    ],
-    "Nourriture": [
-      { en: "apple", fr: "pomme" },
-      { en: "bread", fr: "pain" },
-      { en: "cheese", fr: "fromage" }
-    ]
-  };
-}
-let themes = getThemes();
+// Récupère toutes les cartes depuis SheetDB et regroupe par thème
+let themes = {};
+fetch('https://sheetdb.io/api/v1/xg3dj9vsovufe')
+  .then(r => r.json())
+  .then(data => {
+    // data = tableau de cartes {theme, en, fr}
+    data.forEach(card => {
+      if (!themes[card.theme]) themes[card.theme] = [];
+      themes[card.theme].push({ en: card.en, fr: card.fr });
+    });
+    showThemes();
+  });
 
 const themeList = document.getElementById('themeList');
 const flashcardSection = document.getElementById('flashcardSection');
@@ -34,7 +28,6 @@ let flipped = false;
 let flipTimeout = null;
 
 function showThemes() {
-  themes = getThemes();
   themeList.innerHTML = '';
   Object.keys(themes).forEach(theme => {
     const btn = document.createElement('button');

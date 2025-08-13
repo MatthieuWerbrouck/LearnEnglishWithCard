@@ -1,3 +1,87 @@
+.main-btn {
+  background: #2d6cdf;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 28px;
+  font-size: 1.1rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  margin: 8px 0;
+  box-shadow: 0 2px 8px rgba(45,108,223,0.08);
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.main-btn:hover {
+  background: #1b4fa0;
+  box-shadow: 0 4px 16px rgba(45,108,223,0.12);
+}
+/* Carte d'évaluation harmonisée */
+#flashcardSection .flashcard {
+  margin: 0 auto 24px auto;
+  max-width: 320px;
+  min-height: 120px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(45,108,223,0.10);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  color: #2d6cdf;
+  padding: 32px 0;
+}
+#flashcardSection .card-front {
+  padding: 0 24px;
+  text-align: center;
+  width: 100%;
+}
+/* Harmonisation de la sélection des thèmes pour l'évaluation */
+#themeSelect {
+  margin-bottom: 24px;
+  padding: 16px 0;
+}
+#themeSelect label {
+  display: flex;
+  align-items: center;
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #f7f7fa;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#themeSelect label:hover {
+  background: #e3e6f0;
+}
+#themeSelect input[type="checkbox"] {
+  accent-color: #2d6cdf;
+  margin-right: 12px;
+  width: 18px;
+  height: 18px;
+}
+.main-btn {
+  background: #2d6cdf;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 28px;
+  font-size: 1.1rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  margin: 8px 0;
+  box-shadow: 0 2px 8px rgba(45,108,223,0.08);
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.main-btn:hover {
+  background: #1b4fa0;
+  box-shadow: 0 4px 16px rgba(45,108,223,0.12);
+}
 /* Style formulaire ajout */
 .form-group {
   margin-bottom: 18px;
@@ -86,30 +170,34 @@ label {
   text-align: center;
 }
 
-body {
-  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
-  background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
-  margin: 0;
-  padding: 0;
-  min-height: 100vh;
+/* Réponses en grille pour l'évaluation */
+.answers {
+  margin: 24px 0 0 0;
 }
-
-.menu button {
-  margin: 16px;
-  padding: 18px 40px;
-  font-size: 1.15em;
-  border: none;
-  border-radius: 16px;
-  background: linear-gradient(90deg, #6366f1 0%, #60a5fa 100%);
-  color: #fff;
+.answers > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+.answer-btn {
+  background: #fff;
+  border: 2px solid #2d6cdf;
+  border-radius: 8px;
+  color: #2d6cdf;
+  font-size: 1.1rem;
+  font-family: 'Inter', sans-serif;
   font-weight: 600;
+  padding: 16px 0;
+  min-width: 120px;
+  box-shadow: 0 2px 8px rgba(45,108,223,0.08);
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(99,102,241,0.10);
-  transition: background 0.2s, transform 0.15s;
+  transition: background 0.2s, color 0.2s, border 0.2s;
 }
-.menu button:hover {
-  background: linear-gradient(90deg, #818cf8 0%, #38bdf8 100%);
-  transform: translateY(-2px) scale(1.04);
+.answer-btn:hover {
+  background: #2d6cdf;
+  color: #fff;
 }
 
 .flashcard-container {

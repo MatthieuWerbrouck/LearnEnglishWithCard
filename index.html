@@ -9,13 +9,19 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Flashcards Anglais/Français</h1>
-    <div class="menu">
-      <button onclick="window.location.href='revision.html'">Révision par thème</button>
-      <button onclick="window.location.href='evaluation.html'">Évaluation aléatoire</button>
-      <button onclick="window.location.href='ajout.html'">Ajouter un thème ou une carte</button>
+  <div class="container" style="max-width:420px;margin:48px auto 0 auto;padding:32px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 24px rgba(45,108,223,0.10);text-align:center;">
+    <h1 style="margin-bottom:32px;font-family:'Inter',sans-serif;font-weight:600;color:#2d6cdf;">Flashcards Anglais/Français</h1>
+    <div class="menu" style="display:flex;flex-direction:column;gap:18px;align-items:center;">
+      <button class="main-btn" onclick="window.location.href='revision.html'">Révision par thème</button>
+      <button class="main-btn" onclick="window.location.href='evaluation.html'">Évaluation aléatoire</button>
+      <button class="main-btn" id="refreshBtn" style="margin-top:12px">Actualiser les cartes</button>
     </div>
+    <script>
+      document.getElementById('refreshBtn').onclick = function() {
+        localStorage.setItem('refreshCards', '1');
+        alert('Les cartes seront actualisées lors du prochain affichage !');
+      };
+    </script>
   </div>
 </body>
 </html>
