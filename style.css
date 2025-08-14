@@ -1,3 +1,35 @@
+body {
+  min-height: 100vh;
+  background: linear-gradient(120deg, #e3e6f0 0%, #cfd9ff 60%, #e0c3fc 100%);
+  position: relative;
+}
+
+/* Motifs décoratifs en SVG */
+body::before {
+  content: '';
+  position: absolute;
+  top: -80px;
+  left: -80px;
+  width: 320px;
+  height: 320px;
+  background: url('data:image/svg+xml;utf8,<svg width="320" height="320" xmlns="http://www.w3.org/2000/svg"><circle cx="160" cy="160" r="120" fill="%23b4b6e6" fill-opacity="0.18"/><circle cx="80" cy="80" r="40" fill="%23a3a6d6" fill-opacity="0.12"/></svg>');
+  z-index: 0;
+}
+body::after {
+  content: '';
+  position: absolute;
+  bottom: -100px;
+  right: -100px;
+  width: 260px;
+  height: 260px;
+  background: url('data:image/svg+xml;utf8,<svg width="260" height="260" xmlns="http://www.w3.org/2000/svg"><circle cx="130" cy="130" r="90" fill="%23e0c3fc" fill-opacity="0.16"/><circle cx="200" cy="200" r="40" fill="%23cfd9ff" fill-opacity="0.10"/></svg>');
+  z-index: 0;
+}
+
+.container {
+  position: relative;
+  z-index: 1;
+}
 .main-btn {
   background: #2d6cdf;
   color: #fff;
