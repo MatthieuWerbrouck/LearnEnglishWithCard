@@ -3,37 +3,62 @@
 // ...existing code...
 // Nouvelle logique : sélection de thèmes avant le quiz
 let allCards = [];
+let dataByLang = {};
+let allLangs = [];
+let selectedLang = null;
 let themes = [];
 let selectedThemes = [];
 let cards = [];
 let currentIndex = 0;
 let score = 0;
 
+const langSelectDiv = document.getElementById('langSelect');
 const themeSelectDiv = document.getElementById('themeSelect');
 const startBtn = document.getElementById('startBtn');
 
-fetch('https://sheetdb.io/api/v1/xg3dj9vsovufe')
-  .then(r => r.json())
-  .then(data => {
-    allCards = data;
-    // DEBUG : affiche les données brutes reçues
-    if (window && window.console) {
-      console.log('Données SheetDB:', data);
-    }
-    // Récupère la liste unique des thèmes non vides et non nuls
-    const themeSet = new Set();
-    allCards.forEach(card => {
-      if (card.theme && card.theme.trim() !== '') themeSet.add(card.theme.trim());
+if (!window.sheetDBData) {
+  window.sheetDBPromise = fetch('https://sheetdb.io/api/v1/xg3dj9vsovufe')
+    .then(r => r.json())
+    .then(data => {
+      window.sheetDBData = data;
+      return data;
     });
-    themes = Array.from(themeSet);
-    if (window && window.console) {
-      console.log('Thèmes trouvés:', themes);
-    }
-    showThemeSelection();
+}
+window.sheetDBPromise.then(data => {
+  allCards = data;
+  data.forEach(card => {
+    const lang = card.langue && card.langue.trim();
+    const theme = card.theme && card.theme.trim();
+    if (!lang || !theme) return;
+    if (!dataByLang[lang]) dataByLang[lang] = {};
+    if (!dataByLang[lang][theme]) dataByLang[lang][theme] = [];
+    dataByLang[lang][theme].push(card);
   });
+  allLangs = Object.keys(dataByLang);
+  showLangSelection();
+});
+
+function showLangSelection() {
+  langSelectDiv.innerHTML = '<h2>Choisis la langue à évaluer :</h2>';
+  allLangs.forEach(lang => {
+    const btn = document.createElement('button');
+    btn.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
+    btn.className = 'main-btn';
+    btn.onclick = () => selectLang(lang);
+    langSelectDiv.appendChild(btn);
+  });
+}
+
+function selectLang(lang) {
+  selectedLang = lang;
+  themes = Object.keys(dataByLang[lang]);
+  langSelectDiv.style.display = 'none';
+  themeSelectDiv.style.display = '';
+  showThemeSelection();
+}
 
 function showThemeSelection() {
-  themeSelectDiv.innerHTML = '<h2>Choisissez un ou plusieurs thèmes :</h2>';
+  themeSelectDiv.innerHTML = '<h2>Choisis un ou plusieurs thèmes :</h2>';
   let validThemes = themes.filter(t => t && t.trim() !== '');
   if (validThemes.length === 0) {
     themeSelectDiv.innerHTML += '<p style="color:red">Aucun thème disponible.</p>';
@@ -51,6 +76,7 @@ function showThemeSelection() {
     themeSelectDiv.appendChild(label);
   });
   startBtn.style.display = '';
+// ...fin de showThemeSelection...
 }
 
 startBtn.onclick = function() {
@@ -59,8 +85,14 @@ startBtn.onclick = function() {
     alert('Sélectionnez au moins un thème !');
     return;
   }
-  // Filtre les cartes selon les thèmes choisis
-  cards = allCards.filter(card => selectedThemes.includes(card.theme)).map(card => ({ en: card.en, fr: card.fr }));
+  // Filtre les cartes selon la langue et les thèmes choisis
+  cards = [];
+  selectedThemes.forEach(theme => {
+    cards = cards.concat(dataByLang[selectedLang][theme]);
+  });
+  // Pour chaque carte, on affiche le mot dans la langue choisie et la traduction en français
+  let langKey = selectedLang === 'anglais' ? 'en' : (selectedLang === 'japonais' ? 'ja' : selectedLang);
+  cards = cards.map(card => ({ question: card[langKey], answer: card.fr }));
   shuffle(cards);
   currentIndex = 0;
   score = 0;
@@ -107,12 +139,12 @@ const nextBtn = document.getElementById('nextBtn');     // Bouton "carte suivant
 function showCard() {
   if (!cards.length) return;
   const card = cards[currentIndex];
-  cardFront.textContent = card.en;
+  cardFront.textContent = card.question;
   // Génère 3 mauvaises réponses + la bonne, puis mélange
-  let wrongAnswers = cards.filter(c => c.fr !== card.fr);
+  let wrongAnswers = cards.filter(c => c.answer !== card.answer);
   shuffle(wrongAnswers);
-  let options = wrongAnswers.slice(0, 3).map(c => c.fr);
-  options.push(card.fr);
+  let options = wrongAnswers.slice(0, 3).map(c => c.answer);
+  options.push(card.answer);
   shuffle(options);
   // Affiche les boutons de réponse en grille 2x2
   answersDiv.innerHTML = '';
@@ -127,7 +159,7 @@ function showCard() {
     btn.textContent = option;
     btn.className = 'answer-btn';
     btn.style.width = '100%';
-    btn.onclick = () => selectAnswer(option, card.fr, btn);
+    btn.onclick = () => selectAnswer(option, card.answer, btn);
     grid.appendChild(btn);
   });
   answersDiv.appendChild(grid);

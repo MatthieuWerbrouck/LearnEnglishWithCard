@@ -196,8 +196,10 @@ label {
   transition: background 0.2s, color 0.2s, border 0.2s;
 }
 .answer-btn:hover {
-  background: #2d6cdf;
-  color: #fff;
+  background: #e3e6f0;
+  color: #111;
+  border-color: #14305c;
+  box-shadow: 0 2px 16px rgba(20,48,92,0.18);
 }
 
 .flashcard-container {
