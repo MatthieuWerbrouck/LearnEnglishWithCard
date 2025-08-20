@@ -103,9 +103,9 @@ startBtn.onclick = function() {
   selectedThemes.forEach(theme => {
     cards = cards.concat(dataByLang[selectedLang][theme]);
   });
-  // Pour chaque carte, on affiche le mot dans la langue choisie et la traduction en français
+  // Pour chaque carte, on affiche le mot dans la langue choisie et la traduction en français, et on conserve le thème
   let langKey = selectedLang === 'anglais' ? 'en' : (selectedLang === 'japonais' ? 'ja' : selectedLang);
-  cards = cards.map(card => ({ question: card[langKey], answer: card.fr }));
+  cards = cards.map(card => ({ question: card[langKey], answer: card.fr, theme: card.theme }));
   shuffle(cards);
   currentIndex = 0;
   score = 0;
