@@ -63,8 +63,12 @@ function showThemeSelection() {
   if (validThemes.length === 0) {
     themeSelectDiv.innerHTML += '<p style="color:red">Aucun thème disponible.</p>';
     startBtn.style.display = 'none';
+    document.getElementById('questionCountDiv').style.display = 'none';
     return;
   }
+  // Récupère les scores depuis localStorage
+  let scores = localStorage.getItem('themeScores');
+  let scoreObj = scores ? JSON.parse(scores) : {};
   validThemes.forEach(theme => {
     const label = document.createElement('label');
     label.style.display = 'block';
@@ -72,14 +76,23 @@ function showThemeSelection() {
     checkbox.type = 'checkbox';
     checkbox.value = theme;
     label.appendChild(checkbox);
-    label.appendChild(document.createTextNode(' ' + theme));
+    // Affiche le score à côté du nom du thème
+    const key = selectedLang + ':' + theme;
+    let scoreText = '';
+    if (scoreObj[key] && typeof scoreObj[key].score === 'number') {
+      scoreText = ` (note: ${scoreObj[key].score}/10)`;
+    }
+    label.appendChild(document.createTextNode(' ' + theme + scoreText));
     themeSelectDiv.appendChild(label);
   });
   startBtn.style.display = '';
+  document.getElementById('questionCountDiv').style.display = '';
+let maxQuestions = 10;
 // ...fin de showThemeSelection...
 }
 
 startBtn.onclick = function() {
+  maxQuestions = parseInt(document.getElementById('questionCount').value) || 10;
   selectedThemes = Array.from(themeSelectDiv.querySelectorAll('input:checked')).map(cb => cb.value);
   if (selectedThemes.length === 0) {
     alert('Sélectionnez au moins un thème !');
@@ -138,6 +151,24 @@ const nextBtn = document.getElementById('nextBtn');     // Bouton "carte suivant
 // =============================
 function showCard() {
   if (!cards.length) return;
+  if (currentIndex >= maxQuestions) {
+    // Fin de l'évaluation
+    answersDiv.innerHTML = '';
+    cardFront.textContent = '';
+    feedbackDiv.innerHTML = `Évaluation terminée !<br>Score : <b>${score} / ${maxQuestions}</b>`;
+    nextBtn.style.display = 'none';
+    // Ajoute le bouton recommencer
+    let restartBtn = document.createElement('button');
+    restartBtn.textContent = 'Recommencer';
+    restartBtn.className = 'main-btn';
+    restartBtn.style.marginTop = '24px';
+    restartBtn.onclick = function() {
+      // Recharge la page pour relancer l'évaluation
+      window.location.reload();
+    };
+    feedbackDiv.appendChild(restartBtn);
+    return;
+  }
   const card = cards[currentIndex];
   cardFront.textContent = card.question;
   // Génère 3 mauvaises réponses + la bonne, puis mélange
@@ -176,6 +207,28 @@ function showCard() {
 function selectAnswer(selected, correct, btn) {
   // Désactive tous les boutons
   Array.from(answersDiv.children).forEach(b => b.disabled = true);
+  // Mise à jour du score du thème courant
+  if (cards && cards.length) {
+    // On suppose que chaque carte appartient à un thème unique
+    // On récupère le thème de la carte courante
+    let theme = null;
+    if (selectedThemes && selectedThemes.length === 1) {
+      theme = selectedThemes[0];
+    } else if (cards[currentIndex] && cards[currentIndex].theme) {
+      theme = cards[currentIndex].theme;
+    }
+    if (theme) {
+      // Utilise la même logique que dans revision.js
+      const scores = localStorage.getItem('themeScores');
+      let obj = scores ? JSON.parse(scores) : {};
+      const key = selectedLang + ':' + theme;
+      if (!obj[key]) obj[key] = { score: 0, essais: 0, bonnes: 0 };
+      obj[key].essais++;
+      if (selected === correct) obj[key].bonnes++;
+      obj[key].score = Math.round((obj[key].bonnes / obj[key].essais) * 10);
+      localStorage.setItem('themeScores', JSON.stringify(obj));
+    }
+  }
   if (selected === correct) {
     btn.style.background = '#4caf50'; // vert
     feedbackDiv.textContent = 'Bonne réponse !';

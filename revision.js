@@ -1,3 +1,25 @@
+// Gestion des scores persistants
+function getThemeScores() {
+  const raw = localStorage.getItem('themeScores');
+  return raw ? JSON.parse(raw) : {};
+}
+function setThemeScores(scores) {
+  localStorage.setItem('themeScores', JSON.stringify(scores));
+}
+function getScoreForTheme(lang, theme) {
+  const scores = getThemeScores();
+  const key = lang + ':' + theme;
+  return scores[key] ? scores[key].score : null;
+}
+function updateScoreForTheme(lang, theme, isGood) {
+  const scores = getThemeScores();
+  const key = lang + ':' + theme;
+  if (!scores[key]) scores[key] = { score: 0, essais: 0, bonnes: 0 };
+  scores[key].essais++;
+  if (isGood) scores[key].bonnes++;
+  scores[key].score = Math.round((scores[key].bonnes / scores[key].essais) * 10);
+  setThemeScores(scores);
+}
 
 // Récupère toutes les cartes depuis SheetDB et regroupe par langue puis par thème
 let dataByLang = {};
@@ -65,16 +87,34 @@ function selectLang(lang) {
 function showThemes() {
   themeList.innerHTML = '';
   Object.keys(themes).forEach(theme => {
+    const score = getScoreForTheme(selectedLang, theme);
     const btn = document.createElement('button');
-    btn.textContent = theme;
     btn.className = 'main-btn';
     btn.onclick = () => startRevision(theme);
+    btn.innerHTML = theme + (score !== null ? ` <span style="font-size:0.95em;color:#888;">⭐ ${score}/10</span>` : '');
     themeList.appendChild(btn);
   });
 }
 
 function startRevision(theme) {
   currentTheme = theme;
+  // Crée une liste pondérée de cartes pour ce thème
+  let scores = getThemeScores();
+  let themeKeys = Object.keys(themes);
+  let weightedCards = [];
+  themeKeys.forEach(t => {
+    let key = selectedLang + ':' + t;
+    let score = scores[key] ? scores[key].score : 5; // score par défaut 5/10
+    let weight = 1 + (10 - score); // plus le score est bas, plus le poids est élevé
+    for (let i = 0; i < weight; i++) {
+      weightedCards = weightedCards.concat(themes[t]);
+    }
+  });
+  // Mélange la liste pondérée
+  shuffle(weightedCards);
+  // Filtre pour ne garder que les cartes du thème choisi
+  let cardsForTheme = weightedCards.filter(card => card.theme && card.theme.trim() === theme);
+  themes[currentTheme] = cardsForTheme.length ? cardsForTheme : themes[currentTheme];
   currentIndex = 0;
   flipped = false;
   themeList.style.display = 'none';
