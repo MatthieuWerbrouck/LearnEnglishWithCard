@@ -76,13 +76,16 @@ function showThemeSelection() {
     checkbox.type = 'checkbox';
     checkbox.value = theme;
     label.appendChild(checkbox);
-    // Affiche le score à côté du nom du thème
+    // Affiche le score et le nombre de mots à côté du nom du thème
     const key = selectedLang + ':' + theme;
     let scoreText = '';
     if (scoreObj[key] && typeof scoreObj[key].score === 'number') {
       scoreText = ` (note: ${scoreObj[key].score}/10)`;
     }
-    label.appendChild(document.createTextNode(' ' + theme + scoreText));
+    // Nombre de mots
+    let wordCount = dataByLang[selectedLang][theme] ? dataByLang[selectedLang][theme].length : 0;
+    let countText = ` (${wordCount} mots)`;
+    label.appendChild(document.createTextNode(' ' + theme + scoreText + countText));
     themeSelectDiv.appendChild(label);
   });
   startBtn.style.display = '';
@@ -170,6 +173,17 @@ function showCard() {
     return;
   }
   const card = cards[currentIndex];
+  // Affiche le numéro de la question en cours
+  let questionNumDiv = document.getElementById('questionNumDiv');
+  if (!questionNumDiv) {
+    questionNumDiv = document.createElement('div');
+    questionNumDiv.id = 'questionNumDiv';
+    questionNumDiv.style.textAlign = 'center';
+    questionNumDiv.style.fontSize = '1.1em';
+    questionNumDiv.style.marginBottom = '12px';
+    document.getElementById('flashcardSection').insertBefore(questionNumDiv, document.getElementById('flashcardSection').firstChild);
+  }
+  questionNumDiv.textContent = `Question ${currentIndex + 1} / ${maxQuestions}`;
   cardFront.textContent = card.question;
   // Génère 3 mauvaises réponses + la bonne, puis mélange
   let wrongAnswers = cards.filter(c => c.answer !== card.answer);
