@@ -9,15 +9,19 @@ function setThemeScores(scores) {
 function getScoreForTheme(lang, theme) {
   const scores = getThemeScores();
   const key = lang + ':' + theme;
-  return scores[key] ? scores[key].score : null;
+  return scores[key] && typeof scores[key].score === 'number' ? scores[key].score : null;
 }
 function updateScoreForTheme(lang, theme, isGood) {
   const scores = getThemeScores();
   const key = lang + ':' + theme;
-  if (!scores[key]) scores[key] = { score: 0, essais: 0, bonnes: 0 };
-  scores[key].essais++;
-  if (isGood) scores[key].bonnes++;
-  scores[key].score = Math.round((scores[key].bonnes / scores[key].essais) * 10);
+  if (!scores[key]) scores[key] = { history: [] };
+  // Ajoute la nouvelle réponse à l'historique
+  scores[key].history.push(isGood ? 1 : 0);
+  // Limite l'historique aux 20 dernières réponses
+  if (scores[key].history.length > 20) scores[key].history = scores[key].history.slice(-20);
+  // Calcule la note sur les 20 dernières réponses
+  const sum = scores[key].history.reduce((a, b) => a + b, 0);
+  scores[key].score = Math.round((sum / scores[key].history.length) * 10);
   setThemeScores(scores);
 }
 
@@ -26,27 +30,6 @@ let dataByLang = {};
 let allLangs = [];
 let selectedLang = null;
 let themes = {};
-if (!window.sheetDBData) {
-  window.sheetDBPromise = fetch('https://sheetdb.io/api/v1/xg3dj9vsovufe')
-    .then(r => r.json())
-    .then(data => {
-      window.sheetDBData = data;
-      return data;
-    });
-}
-window.sheetDBPromise.then(data => {
-  data.forEach(card => {
-    const lang = card.langue && card.langue.trim();
-    const theme = card.theme && card.theme.trim();
-    if (!lang || !theme) return;
-    if (!dataByLang[lang]) dataByLang[lang] = {};
-    if (!dataByLang[lang][theme]) dataByLang[lang][theme] = [];
-    dataByLang[lang][theme].push(card);
-  });
-  allLangs = Object.keys(dataByLang);
-  showLangSelection();
-});
-
 const langSelectDiv = document.getElementById('langSelect');
 const themeTitle = document.getElementById('themeTitle');
 const themeList = document.getElementById('themeList');
@@ -61,6 +44,30 @@ let currentTheme = null;
 let currentIndex = 0;
 let flipped = false;
 let flipTimeout = null;
+
+// Initialisation SheetDB et affichage des langues après chargement du DOM
+document.addEventListener('DOMContentLoaded', function() {
+  if (!window.sheetDBData) {
+    window.sheetDBPromise = fetch('https://sheetdb.io/api/v1/xg3dj9vsovufe')
+      .then(r => r.json())
+      .then(data => {
+        window.sheetDBData = data;
+        return data;
+      });
+  }
+  window.sheetDBPromise.then(data => {
+    data.forEach(card => {
+      const lang = card.langue && card.langue.trim();
+      const theme = card.theme && card.theme.trim();
+      if (!lang || !theme) return;
+      if (!dataByLang[lang]) dataByLang[lang] = {};
+      if (!dataByLang[lang][theme]) dataByLang[lang][theme] = [];
+      dataByLang[lang][theme].push(card);
+    });
+    allLangs = Object.keys(dataByLang);
+    showLangSelection();
+  });
+});
 
 function showLangSelection() {
   langSelectDiv.innerHTML = '';
@@ -82,8 +89,6 @@ function selectLang(lang) {
   showThemes();
 }
 
-// ...déjà défini plus haut...
-
 function showThemes() {
   themeList.innerHTML = '';
   Object.keys(themes).forEach(theme => {
@@ -98,23 +103,19 @@ function showThemes() {
 
 function startRevision(theme) {
   currentTheme = theme;
-  // Crée une liste pondérée de cartes pour ce thème
+  // Pondération uniquement sur le thème choisi
   let scores = getThemeScores();
-  let themeKeys = Object.keys(themes);
+  let key = selectedLang + ':' + theme;
+  let score = scores[key] ? scores[key].score : 5; // score par défaut 5/10
+  let weight = 1 + (10 - score); // plus le score est bas, plus le poids est élevé
   let weightedCards = [];
-  themeKeys.forEach(t => {
-    let key = selectedLang + ':' + t;
-    let score = scores[key] ? scores[key].score : 5; // score par défaut 5/10
-    let weight = 1 + (10 - score); // plus le score est bas, plus le poids est élevé
-    for (let i = 0; i < weight; i++) {
-      weightedCards = weightedCards.concat(themes[t]);
-    }
-  });
+  for (let i = 0; i < weight; i++) {
+    weightedCards = weightedCards.concat(themes[theme]);
+  }
   // Mélange la liste pondérée
   shuffle(weightedCards);
-  // Filtre pour ne garder que les cartes du thème choisi
-  let cardsForTheme = weightedCards.filter(card => card.theme && card.theme.trim() === theme);
-  themes[currentTheme] = cardsForTheme.length ? cardsForTheme : themes[currentTheme];
+  // Utilise la liste pondérée pour ce thème
+  themes[currentTheme] = weightedCards.length ? weightedCards : themes[currentTheme];
   currentIndex = 0;
   flipped = false;
   themeList.style.display = 'none';
@@ -137,7 +138,6 @@ function showCard() {
     flipTimeout = null;
   }
 }
-
 
 flashcard.onclick = function() {
   if (flipTimeout) {
@@ -173,7 +173,17 @@ nextBtn.onclick = function() {
   if (currentIndex < themes[currentTheme].length - 1) {
     currentIndex++;
     showCard();
-  }
 };
-
 showThemes();
+showCard();
+    showCard();
+  }
+showThemes();
+
+// Fonction utilitaire pour mélanger un tableau
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}

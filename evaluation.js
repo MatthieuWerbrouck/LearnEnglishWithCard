@@ -1,6 +1,3 @@
-
-
-// ...existing code...
 // Nouvelle logique : sélection de thèmes avant le quiz
 let allCards = [];
 let dataByLang = {};
@@ -15,6 +12,8 @@ let score = 0;
 const langSelectDiv = document.getElementById('langSelect');
 const themeSelectDiv = document.getElementById('themeSelect');
 const startBtn = document.getElementById('startBtn');
+const selectAllThemesBtn = document.getElementById('selectAllThemesBtn');
+const themeSearchInput = document.getElementById('themeSearch');
 
 if (!window.sheetDBData) {
   window.sheetDBPromise = fetch('https://sheetdb.io/api/v1/xg3dj9vsovufe')
@@ -59,26 +58,54 @@ function selectLang(lang) {
 
 function showThemeSelection() {
   themeSelectDiv.innerHTML = '<h2>Choisis un ou plusieurs thèmes :</h2>';
+  // Ajoute la barre de recherche et le bouton tout sélectionner
+  themeSearchInput.style.display = '';
+  themeSelectDiv.appendChild(themeSearchInput);
+  selectAllThemesBtn.style.display = '';
+  themeSelectDiv.appendChild(selectAllThemesBtn);
+
   let validThemes = themes.filter(t => t && t.trim() !== '');
-  if (validThemes.length === 0) {
-    themeSelectDiv.innerHTML += '<p style="color:red">Aucun thème disponible.</p>';
-    startBtn.style.display = 'none';
-    document.getElementById('questionCountDiv').style.display = 'none';
-    return;
-  }
-  // Récupère les scores depuis localStorage
-  let scores = localStorage.getItem('themeScores');
-  let scoreObj = scores ? JSON.parse(scores) : {};
-  validThemes.forEach(theme => {
+  // Stocke la liste complète pour le filtrage
+  themeSelectDiv._allThemes = validThemes;
+
+  renderThemeCheckboxes(validThemes);
+
+  startBtn.style.display = '';
+  document.getElementById('questionCountDiv').style.display = '';
+  updateQuestionCountDefault();
+}
+
+function updateQuestionCountDefault() {
+  const questionCountInput = document.getElementById('questionCount');
+  const checkedThemes = Array.from(themeSelectDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+  let totalWords = 0;
+  checkedThemes.forEach(theme => {
+    totalWords += dataByLang[selectedLang][theme] ? dataByLang[selectedLang][theme].length : 0;
+  });
+  questionCountInput.value = totalWords || 1;
+}
+
+// Fonction pour afficher les thèmes filtrés
+function renderThemeCheckboxes(themeList) {
+  // Sauvegarde les thèmes actuellement cochés
+  const checkedThemes = Array.from(themeSelectDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+  // Supprime les anciens checkboxes
+  Array.from(themeSelectDiv.querySelectorAll('label')).forEach(e => e.remove());
+  themeList.forEach(theme => {
     const label = document.createElement('label');
     label.style.display = 'block';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.value = theme;
+    // Restaure l'état coché si le thème était sélectionné
+    if (checkedThemes.includes(theme)) checkbox.checked = true;
+    checkbox.onchange = updateQuestionCountDefault;
     label.appendChild(checkbox);
     // Affiche le score et le nombre de mots à côté du nom du thème
     const key = selectedLang + ':' + theme;
     let scoreText = '';
+    let scores = localStorage.getItem('themeScores');
+    let scoreObj = scores ? JSON.parse(scores) : {};
     if (scoreObj[key] && typeof scoreObj[key].score === 'number') {
       scoreText = ` (note: ${scoreObj[key].score}/10)`;
     }
@@ -88,25 +115,42 @@ function showThemeSelection() {
     label.appendChild(document.createTextNode(' ' + theme + scoreText + countText));
     themeSelectDiv.appendChild(label);
   });
-  startBtn.style.display = '';
-  document.getElementById('questionCountDiv').style.display = '';
-let maxQuestions = 10;
-// ...fin de showThemeSelection...
 }
 
+// Barre de recherche : filtre la liste des thèmes
+themeSearchInput.oninput = function() {
+  const search = themeSearchInput.value.trim().toLowerCase();
+  const allThemes = themeSelectDiv._allThemes || [];
+  let filtered;
+  if (search === '') {
+    filtered = allThemes;
+  } else {
+    filtered = allThemes.filter(theme => theme.toLowerCase().includes(search));
+  }
+  renderThemeCheckboxes(filtered);
+  updateQuestionCountDefault();
+};
+
+selectAllThemesBtn.onclick = function() {
+  const checkboxes = Array.from(themeSelectDiv.querySelectorAll('input[type="checkbox"]'));
+  const allChecked = checkboxes.every(cb => cb.checked);
+  checkboxes.forEach(cb => cb.checked = !allChecked);
+  updateQuestionCountDefault();
+};
+
 startBtn.onclick = function() {
-  maxQuestions = parseInt(document.getElementById('questionCount').value) || 10;
   selectedThemes = Array.from(themeSelectDiv.querySelectorAll('input:checked')).map(cb => cb.value);
   if (selectedThemes.length === 0) {
     alert('Sélectionnez au moins un thème !');
     return;
   }
+  // Récupère la valeur choisie (modifiée ou par défaut)
+  maxQuestions = parseInt(document.getElementById('questionCount').value) || 1;
   // Filtre les cartes selon la langue et les thèmes choisis
   cards = [];
   selectedThemes.forEach(theme => {
     cards = cards.concat(dataByLang[selectedLang][theme]);
   });
-  // Pour chaque carte, on affiche le mot dans la langue choisie et la traduction en français, et on conserve le thème
   let langKey = selectedLang === 'anglais' ? 'en' : (selectedLang === 'japonais' ? 'ja' : selectedLang);
   cards = cards.map(card => ({ question: card[langKey], answer: card.fr, theme: card.theme }));
   shuffle(cards);
@@ -166,7 +210,6 @@ function showCard() {
     restartBtn.className = 'main-btn';
     restartBtn.style.marginTop = '24px';
     restartBtn.onclick = function() {
-      // Recharge la page pour relancer l'évaluation
       window.location.reload();
     };
     feedbackDiv.appendChild(restartBtn);
@@ -223,8 +266,6 @@ function selectAnswer(selected, correct, btn) {
   Array.from(answersDiv.children).forEach(b => b.disabled = true);
   // Mise à jour du score du thème courant
   if (cards && cards.length) {
-    // On suppose que chaque carte appartient à un thème unique
-    // On récupère le thème de la carte courante
     let theme = null;
     if (selectedThemes && selectedThemes.length === 1) {
       theme = selectedThemes[0];
@@ -232,14 +273,15 @@ function selectAnswer(selected, correct, btn) {
       theme = cards[currentIndex].theme;
     }
     if (theme) {
-      // Utilise la même logique que dans revision.js
+      // Nouvelle logique : historique glissant sur 20 réponses
       const scores = localStorage.getItem('themeScores');
       let obj = scores ? JSON.parse(scores) : {};
       const key = selectedLang + ':' + theme;
-      if (!obj[key]) obj[key] = { score: 0, essais: 0, bonnes: 0 };
-      obj[key].essais++;
-      if (selected === correct) obj[key].bonnes++;
-      obj[key].score = Math.round((obj[key].bonnes / obj[key].essais) * 10);
+      if (!obj[key]) obj[key] = { history: [] };
+      obj[key].history.push(selected === correct ? 1 : 0);
+      if (obj[key].history.length > 20) obj[key].history = obj[key].history.slice(-20);
+      const sum = obj[key].history.reduce((a, b) => a + b, 0);
+      obj[key].score = Math.round((sum / obj[key].history.length) * 10);
       localStorage.setItem('themeScores', JSON.stringify(obj));
     }
   }
@@ -264,10 +306,6 @@ function selectAnswer(selected, correct, btn) {
 // =============================
 nextBtn.onclick = function() {
   currentIndex++;
-  if (currentIndex >= cards.length) {
-    shuffle(cards);
-    currentIndex = 0;
-  }
   showCard();
 };
 
