@@ -262,22 +262,38 @@ function showCard() {
 // 6. Gestion de la sélection d'une réponse
 // =============================
 function selectAnswer(selected, correct, btn) {
-  // Désactive tous les boutons
-  Array.from(answersDiv.children).forEach(b => b.disabled = true);
+  // Désactive tous les boutons de réponse
+  const grid = answersDiv.querySelector('div');
+  if (grid) {
+    Array.from(grid.children).forEach(b => b.disabled = true);
+  }
   // Mise à jour du score du thème courant
   if (cards && cards.length) {
     let theme = null;
-    if (selectedThemes && selectedThemes.length === 1) {
-      theme = selectedThemes[0];
-    } else if (cards[currentIndex] && cards[currentIndex].theme) {
+    // On récupère le thème de la carte courante si présent et non vide
+    if (
+      cards[currentIndex] &&
+      typeof cards[currentIndex].theme === "string" &&
+      cards[currentIndex].theme.length > 0
+    ) {
       theme = cards[currentIndex].theme;
+    } else if (
+      selectedThemes &&
+      selectedThemes.length === 1 &&
+      typeof selectedThemes[0] === "string" &&
+      selectedThemes[0].length > 0
+    ) {
+      theme = selectedThemes[0];
     }
-    if (theme) {
-      // Nouvelle logique : historique glissant sur 20 réponses
+    // Correction : vérifie que theme est une chaîne non vide
+    if (typeof theme === "string" && theme.length > 0) {
       const scores = localStorage.getItem('themeScores');
       let obj = scores ? JSON.parse(scores) : {};
       const key = selectedLang + ':' + theme;
-      if (!obj[key]) obj[key] = { history: [] };
+      // Correction : initialisation stricte de obj[key] et obj[key].history
+      if (!obj[key] || !Array.isArray(obj[key].history)) {
+        obj[key] = { history: [] };
+      }
       obj[key].history.push(selected === correct ? 1 : 0);
       if (obj[key].history.length > 20) obj[key].history = obj[key].history.slice(-20);
       const sum = obj[key].history.reduce((a, b) => a + b, 0);
@@ -293,9 +309,12 @@ function selectAnswer(selected, correct, btn) {
     btn.style.background = '#e74c3c'; // rouge
     feedbackDiv.textContent = `Mauvaise réponse. La bonne réponse était : ${correct}`;
     // Met en surbrillance la bonne réponse
-    Array.from(answersDiv.children).forEach(b => {
-      if (b.textContent === correct) b.style.background = '#4caf50';
-    });
+    const grid = answersDiv.querySelector('div');
+    if (grid) {
+      Array.from(grid.children).forEach(b => {
+        if (b.textContent === correct) b.style.background = '#4caf50';
+      });
+    }
   }
   nextBtn.style.display = '';
 }
