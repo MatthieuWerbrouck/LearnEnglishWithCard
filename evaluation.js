@@ -14,6 +14,9 @@ const themeSelectDiv = document.getElementById('themeSelect');
 const startBtn = document.getElementById('startBtn');
 const selectAllThemesBtn = document.getElementById('selectAllThemesBtn');
 const themeSearchInput = document.getElementById('themeSearch');
+const modeSelectDiv = document.getElementById('modeSelect');
+
+let evalMode = 'mcq'; // 'mcq' ou 'input'
 
 if (!window.sheetDBData) {
   window.sheetDBPromise = fetch('https://sheetdb.io/api/v1/xg3dj9vsovufe')
@@ -52,6 +55,7 @@ function selectLang(lang) {
   selectedLang = lang;
   themes = Object.keys(dataByLang[lang]);
   langSelectDiv.style.display = 'none';
+  modeSelectDiv.style.display = '';
   themeSelectDiv.style.display = '';
   showThemeSelection();
 }
@@ -228,35 +232,79 @@ function showCard() {
   }
   questionNumDiv.textContent = `Question ${currentIndex + 1} / ${maxQuestions}`;
   cardFront.textContent = card.question;
-  // Génère 3 mauvaises réponses + la bonne, puis mélange
-  let wrongAnswers = cards.filter(c => c.answer !== card.answer);
-  shuffle(wrongAnswers);
-  let options = wrongAnswers.slice(0, 3).map(c => c.answer);
-  options.push(card.answer);
-  shuffle(options);
-  // Affiche les boutons de réponse en grille 2x2
   answersDiv.innerHTML = '';
-  const grid = document.createElement('div');
-  grid.style.display = 'grid';
-  grid.style.gridTemplateColumns = '1fr 1fr';
-  grid.style.gap = '16px';
-  grid.style.maxWidth = '400px';
-  grid.style.margin = '0 auto';
-  options.forEach(option => {
-    const btn = document.createElement('button');
-    btn.textContent = option;
-    btn.className = 'answer-btn';
-    btn.style.width = '100%';
-    btn.onclick = () => selectAnswer(option, card.answer, btn);
-    grid.appendChild(btn);
-  });
-  answersDiv.appendChild(grid);
   feedbackDiv.textContent = '';
   nextBtn.style.display = 'none';
+
+  if (getEvalMode() === 'mcq') {
+    // Mode QCM (4 choix)
+    let wrongAnswers = cards.filter(c => c.answer !== card.answer);
+    shuffle(wrongAnswers);
+    let options = wrongAnswers.slice(0, 3).map(c => c.answer);
+    options.push(card.answer);
+    shuffle(options);
+    const grid = document.createElement('div');
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = '1fr 1fr';
+    grid.style.gap = '16px';
+    grid.style.maxWidth = '400px';
+    grid.style.margin = '0 auto';
+    options.forEach(option => {
+      const btn = document.createElement('button');
+      btn.textContent = option;
+      btn.className = 'answer-btn';
+      btn.style.width = '100%';
+      btn.onclick = () => selectAnswer(option, card.answer, btn);
+      grid.appendChild(btn);
+    });
+    answersDiv.appendChild(grid);
+  } else {
+    // Mode saisie texte
+    const inputDiv = document.createElement('div');
+    inputDiv.style.textAlign = 'center';
+    inputDiv.style.marginTop = '18px';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'form-input';
+    input.placeholder = 'Écris la réponse...';
+    input.style.width = '70%';
+    input.style.fontSize = '1.1em';
+    inputDiv.appendChild(input);
+
+    const submitBtn = document.createElement('button');
+    submitBtn.textContent = 'Valider';
+    submitBtn.className = 'main-btn';
+    submitBtn.style.marginLeft = '12px';
+    submitBtn.onclick = function() {
+      submitBtn.disabled = true;
+      input.disabled = true;
+      selectTextAnswer(input.value, card.answer, input, submitBtn);
+    };
+    // Ajout : validation avec la touche "Entrée"
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !submitBtn.disabled && !input.disabled) {
+        submitBtn.click();
+      }
+    });
+
+    inputDiv.appendChild(submitBtn);
+    answersDiv.appendChild(inputDiv);
+  }
 }
 
+// Récupère le mode choisi
+function getEvalMode() {
+  const radios = document.getElementsByName('evalMode');
+  for (let r of radios) {
+    if (r.checked) return r.value;
+  }
+  return 'mcq';
+}
 
-
+// Met à jour le mode à chaque changement
+modeSelectDiv.addEventListener('change', function() {
+  evalMode = getEvalMode();
+});
 
 // =============================
 // 6. Gestion de la sélection d'une réponse
@@ -315,6 +363,50 @@ function selectAnswer(selected, correct, btn) {
         if (b.textContent === correct) b.style.background = '#4caf50';
       });
     }
+  }
+  nextBtn.style.display = '';
+}
+
+// Ajoutez cette fonction pour le mode texte
+function selectTextAnswer(userInput, correct, input, submitBtn) {
+  // Normalisation pour comparaison (minuscule, trim)
+  const user = userInput.trim().toLowerCase();
+  const corr = correct.trim().toLowerCase();
+  let theme = null;
+  if (
+    cards[currentIndex] &&
+    typeof cards[currentIndex].theme === "string" &&
+    cards[currentIndex].theme.length > 0
+  ) {
+    theme = cards[currentIndex].theme;
+  } else if (
+    selectedThemes &&
+    selectedThemes.length === 1 &&
+    typeof selectedThemes[0] === "string" &&
+    selectedThemes[0].length > 0
+  ) {
+    theme = selectedThemes[0];
+  }
+  if (typeof theme === "string" && theme.length > 0) {
+    const scores = localStorage.getItem('themeScores');
+    let obj = scores ? JSON.parse(scores) : {};
+    const key = selectedLang + ':' + theme;
+    if (!obj[key] || !Array.isArray(obj[key].history)) {
+      obj[key] = { history: [] };
+    }
+    obj[key].history.push(user === corr ? 1 : 0);
+    if (obj[key].history.length > 20) obj[key].history = obj[key].history.slice(-20);
+    const sum = obj[key].history.reduce((a, b) => a + b, 0);
+    obj[key].score = Math.round((sum / obj[key].history.length) * 10);
+    localStorage.setItem('themeScores', JSON.stringify(obj));
+  }
+  if (user === corr) {
+    input.style.background = '#d1fae5'; // vert
+    feedbackDiv.textContent = 'Bonne réponse !';
+    score++;
+  } else {
+    input.style.background = '#fee2e2'; // rouge
+    feedbackDiv.innerHTML = `Mauvaise réponse.<br>La bonne réponse était : <b>${correct}</b>`;
   }
   nextBtn.style.display = '';
 }
