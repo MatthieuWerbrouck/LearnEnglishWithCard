@@ -10,9 +10,13 @@
   <div class="container">
     <h1 style="margin-bottom:24px;">Évaluation par thème(s)</h1>
     <div id="langSelect" style="margin-bottom:24px;"></div>
-    <div id="modeSelect" style="margin-bottom:18px;display:none;">
-      <label><input type="radio" name="evalMode" value="mcq" checked> QCM (4 choix)</label>
-      <label style="margin-left:18px;"><input type="radio" name="evalMode" value="input"> Saisie texte</label>
+    <div class="form-group" style="margin-bottom:18px;">
+      <label for="modeSelect">Mode d'évaluation :</label>
+      <select id="modeSelect" class="form-input">
+        <option value="qcm">QCM (mot anglais, choix français)</option>
+        <option value="qcm_fr_en">QCM (mot français, choix anglais)</option>
+        <option value="libre">Réponse libre</option>
+      </select>
     </div>
     <div id="themeSelect" style="margin-bottom:24px;display:none;">
       <input type="text" id="themeSearch" class="form-input" placeholder="Rechercher un thème..." style="margin-bottom:12px;display:none;">

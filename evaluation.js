@@ -426,3 +426,146 @@ nextBtn.onclick = function() {
 // =============================
 // ...fin du script...
 
+function afficherQuestion() {
+  if (!cards.length) return;
+  if (currentIndex >= maxQuestions) {
+    // Fin de l'évaluation
+    answersDiv.innerHTML = '';
+    cardFront.textContent = '';
+    feedbackDiv.innerHTML = `Évaluation terminée !<br>Score : <b>${score} / ${maxQuestions}</b>`;
+    nextBtn.style.display = 'none';
+    // Ajoute le bouton recommencer
+    let restartBtn = document.createElement('button');
+    restartBtn.textContent = 'Recommencer';
+    restartBtn.className = 'main-btn';
+    restartBtn.style.marginTop = '24px';
+    restartBtn.onclick = function() {
+      window.location.reload();
+    };
+    feedbackDiv.appendChild(restartBtn);
+    return;
+  }
+  const card = cards[currentIndex];
+  // Affiche le numéro de la question en cours
+  let questionNumDiv = document.getElementById('questionNumDiv');
+  if (!questionNumDiv) {
+    questionNumDiv = document.createElement('div');
+    questionNumDiv.id = 'questionNumDiv';
+    questionNumDiv.style.textAlign = 'center';
+    questionNumDiv.style.fontSize = '1.1em';
+    questionNumDiv.style.marginBottom = '12px';
+    document.getElementById('flashcardSection').insertBefore(questionNumDiv, document.getElementById('flashcardSection').firstChild);
+  }
+  questionNumDiv.textContent = `Question ${currentIndex + 1} / ${maxQuestions}`;
+  cardFront.textContent = card.question;
+  answersDiv.innerHTML = '';
+  feedbackDiv.textContent = '';
+  nextBtn.style.display = 'none';
+
+  if (getEvalMode() === 'mcq') {
+    // Mode QCM (4 choix)
+    let wrongAnswers = cards.filter(c => c.answer !== card.answer);
+    shuffle(wrongAnswers);
+    let options = wrongAnswers.slice(0, 3).map(c => c.answer);
+    options.push(card.answer);
+    shuffle(options);
+    const grid = document.createElement('div');
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = '1fr 1fr';
+    grid.style.gap = '16px';
+    grid.style.maxWidth = '400px';
+    grid.style.margin = '0 auto';
+    options.forEach(option => {
+      const btn = document.createElement('button');
+      btn.textContent = option;
+      btn.className = 'answer-btn';
+      btn.style.width = '100%';
+      btn.onclick = () => selectAnswer(option, card.answer, btn);
+      grid.appendChild(btn);
+    });
+    answersDiv.appendChild(grid);
+  } else if (getEvalMode() === 'qcm_fr_en') {
+    // Nouveau mode : mot français, choix anglais
+    cardFront.textContent = card.answer;
+    // Générer les choix en anglais
+    const propositions = genererPropositions(cards, card, 'en');
+    afficherPropositions(propositions, card.answer);
+  } else {
+    // Mode saisie texte
+    const inputDiv = document.createElement('div');
+    inputDiv.style.textAlign = 'center';
+    inputDiv.style.marginTop = '18px';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'form-input';
+    input.placeholder = 'Écris la réponse...';
+    input.style.width = '70%';
+    input.style.fontSize = '1.1em';
+    inputDiv.appendChild(input);
+
+    const submitBtn = document.createElement('button');
+    submitBtn.textContent = 'Valider';
+    submitBtn.className = 'main-btn';
+    submitBtn.style.marginLeft = '12px';
+    submitBtn.onclick = function() {
+      submitBtn.disabled = true;
+      input.disabled = true;
+      selectTextAnswer(input.value, card.answer, input, submitBtn);
+    };
+    // Ajout : validation avec la touche "Entrée"
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !submitBtn.disabled && !input.disabled) {
+        submitBtn.click();
+      }
+    });
+
+    inputDiv.appendChild(submitBtn);
+    answersDiv.appendChild(inputDiv);
+  }
+}
+
+function genererPropositions(cards, currentCard, langue) {
+  // Récupère la bonne réponse
+  const bonneReponse = currentCard[langue];
+  // Prend d'autres réponses aléatoires
+  let autres = cards.filter(card => card !== currentCard).map(card => card[langue]);
+  autres = melanger(autres).slice(0, 3);
+  const propositions = [bonneReponse, ...autres];
+  return melanger(propositions);
+}
+
+function afficherPropositions(propositions, bonneReponse) {
+  const grid = document.createElement('div');
+  grid.style.display = 'grid';
+  grid.style.gridTemplateColumns = '1fr 1fr';
+  grid.style.gap = '16px';
+  grid.style.maxWidth = '400px';
+  grid.style.margin = '0 auto';
+  propositions.forEach(proposition => {
+    const btn = document.createElement('button');
+    btn.textContent = proposition;
+    btn.className = 'answer-btn';
+    btn.style.width = '100%';
+    btn.onclick = () => {
+      // Désactive tous les boutons de réponse
+      Array.from(grid.children).forEach(b => b.disabled = true);
+      // Vérifie la réponse
+      if (proposition === bonneReponse) {
+        btn.style.background = '#4caf50'; // vert
+        feedbackDiv.textContent = 'Bonne réponse !';
+        score++;
+      } else {
+        btn.style.background = '#e74c3c'; // rouge
+        feedbackDiv.textContent = `Mauvaise réponse. La bonne réponse était : ${bonneReponse}`;
+        // Met en surbrillance la bonne réponse
+        Array.from(grid.children).forEach(b => {
+          if (b.textContent === bonneReponse) b.style.background = '#4caf50';
+        });
+      }
+      nextBtn.style.display = '';
+    };
+    grid.appendChild(btn);
+  });
+  answersDiv.appendChild(grid);
+}
+
