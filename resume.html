@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Résumé des notes</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Résumé de l'apprentissage</h1>
+    <div id="scoreHistory"></div>
+    <button onclick="window.location.href='index.html'" class="main-btn" style="margin-top:32px;">Retour</button>
+  </div>
+  <script>
+    function getHistory() {
+      const history = JSON.parse(localStorage.getItem('scoreHistory')) || [];
+      return history;
+    }
+    function renderHistory() {
+      const history = getHistory();
+      if (history.length === 0) {
+        document.getElementById('scoreHistory').innerHTML = '<p>Aucun score enregistré pour le moment.</p>';
+        return;
+      }
+      let html = '<table class="score-table"><tr><th>Date</th><th>Mode</th><th>Score</th><th>Questions</th></tr>';
+      history.reverse().forEach(item => {
+        html += `<tr><td>${item.date}</td><td>${item.mode}</td><td>${item.score}</td><td>${item.total}</td></tr>`;
+      });
+      html += '</table>';
+      document.getElementById('scoreHistory').innerHTML = html;
+    }
+    renderHistory();
+  </script>
+</body>
+</html>

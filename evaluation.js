@@ -9,6 +9,11 @@ let cards = [];
 let currentIndex = 0;
 let score = 0;
 
+let scoreQCM = 0;
+let scoreQCMFrEn = 0;
+let scoreLibre = 0;
+let currentMode = '';
+
 const langSelectDiv = document.getElementById('langSelect');
 const themeSelectDiv = document.getElementById('themeSelect');
 const startBtn = document.getElementById('startBtn');
