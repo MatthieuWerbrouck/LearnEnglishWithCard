@@ -9,27 +9,66 @@
 <body>
   <div class="container">
     <h1>Résumé de l'apprentissage</h1>
+    <div style="margin-bottom:18px;">
+      <label for="modeFilter">Filtrer par mode :</label>
+      <select id="modeFilter" class="form-input">
+        <option value="all">Tous</option>
+        <option value="qcm">QCM (mot anglais, choix français)</option>
+        <option value="qcm_fr_en">QCM (mot français, choix anglais)</option>
+        <option value="libre">Réponse libre</option>
+      </select>
+    </div>
+    <div style="margin-bottom:18px;">
+      <label for="langFilter">Filtrer par langue :</label>
+      <select id="langFilter" class="form-input">
+        <option value="all">Toutes</option>
+        <option value="anglais">Anglais</option>
+        <option value="francais">Français</option>
+      </select>
+    </div>
     <div id="scoreHistory"></div>
     <button onclick="window.location.href='index.html'" class="main-btn" style="margin-top:32px;">Retour</button>
   </div>
   <script>
     function getHistory() {
-      const history = JSON.parse(localStorage.getItem('scoreHistory')) || [];
+      let history = JSON.parse(localStorage.getItem('scoreHistory')) || [];
+      if (!Array.isArray(history)) history = [];
       return history;
     }
-    function renderHistory() {
+    function modeMatch(itemMode, filterMode) {
+      if (filterMode === 'all') return true;
+      if (itemMode === filterMode) return true;
+      if (filterMode === 'qcm' && itemMode.includes('anglais') && itemMode.includes('français')) return true;
+      if (filterMode === 'qcm_fr_en' && itemMode.includes('français') && itemMode.includes('anglais')) return true;
+      if (filterMode === 'libre' && itemMode.toLowerCase().includes('libre')) return true;
+      return false;
+    }
+    function langMatch(itemLang, filterLang) {
+      if (!itemLang) return true;
+      if (filterLang === 'all') return true;
+      if (itemLang.toLowerCase() === filterLang) return true;
+      return false;
+    }
+    function renderHistory(modeFilter = 'all', langFilter = 'all') {
       const history = getHistory();
-      if (history.length === 0) {
-        document.getElementById('scoreHistory').innerHTML = '<p>Aucun score enregistré pour le moment.</p>';
+      let filtered = history.filter(item => modeMatch(item.mode, modeFilter) && langMatch(item.lang, langFilter));
+      if (filtered.length === 0) {
+        document.getElementById('scoreHistory').innerHTML = '<p>Aucun score enregistré pour ce filtre.</p>';
         return;
       }
-      let html = '<table class="score-table"><tr><th>Date</th><th>Mode</th><th>Score</th><th>Questions</th></tr>';
-      history.reverse().forEach(item => {
-        html += `<tr><td>${item.date}</td><td>${item.mode}</td><td>${item.score}</td><td>${item.total}</td></tr>`;
+      let html = '<table class="score-table"><tr><th>Date</th><th>Mode</th><th>Langue</th><th>Score</th><th>Questions</th></tr>';
+      filtered.reverse().forEach(item => {
+        html += `<tr><td>${item.date}</td><td>${item.mode}</td><td>${item.lang || ''}</td><td>${item.score}</td><td>${item.total}</td></tr>`;
       });
       html += '</table>';
       document.getElementById('scoreHistory').innerHTML = html;
     }
+    document.getElementById('modeFilter').addEventListener('change', function() {
+      renderHistory(this.value, document.getElementById('langFilter').value);
+    });
+    document.getElementById('langFilter').addEventListener('change', function() {
+      renderHistory(document.getElementById('modeFilter').value, this.value);
+    });
     renderHistory();
   </script>
 </body>

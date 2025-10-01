@@ -424,3 +424,33 @@ function selectTextAnswer(userInput, correct, input, submitBtn) {
   nextBtn.style.display = '';
 }
 
+// =============================
+// 7. Sauvegarde et affichage des résultats
+// =============================
+function saveScoreToHistory(score, totalQuestions, mode, lang) {
+  const history = JSON.parse(localStorage.getItem('scoreHistory')) || [];
+  history.push({
+    date: new Date().toLocaleString(),
+    mode: mode,
+    lang: lang,
+    score: score,
+    total: totalQuestions
+  });
+  localStorage.setItem('scoreHistory', JSON.stringify(history));
+}
+
+function afficherResultat() {
+  let score = 0;
+  if (currentMode === 'qcm') score = scoreQCM;
+  else if (currentMode === 'qcm_fr_en') score = scoreQCMFrEn;
+  else if (currentMode === 'libre') score = scoreLibre;
+  document.getElementById('feedback').innerHTML = `Votre score : <b>${score}</b> / ${totalQuestions}`;
+  // Récupération cohérente de la langue sélectionnée
+  let selectedLang = 'all';
+  const langSelect = document.getElementById('langSelect');
+  if (langSelect && langSelect.querySelector('select')) {
+    selectedLang = langSelect.querySelector('select').value;
+  }
+  saveScoreToHistory(score, totalQuestions, currentMode, selectedLang);
+}
+
