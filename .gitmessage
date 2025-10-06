@@ -1,0 +1,19 @@
+# Type de changement (choisir un) :
+# feat: nouvelle fonctionnalité
+# fix: correction de bug  
+# style: changements d'apparence/UI
+# refactor: refactorisation du code
+# perf: amélioration des performances
+# docs: mise à jour documentation
+# test: ajout/modification de tests
+
+# Description courte (50 caractères max)
+
+
+# Description détaillée (optionnelle)
+# Expliquez le QUOI et POURQUOI, pas le COMMENT
+
+
+# Issues liées (optionnel)
+# Résout #123
+# Voir aussi #456
