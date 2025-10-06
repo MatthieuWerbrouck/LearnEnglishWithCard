@@ -72,18 +72,44 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (newTheme) theme = newTheme;
     
-    if (!theme || !en || !fr) {
-      showMessage('⚠️ Veuillez remplir tous les champs requis.', 'error');
+    // NOUVELLE VALIDATION ROBUSTE avec DataValidator
+    const cardData = {
+      fr: fr,
+      en: en,
+      ja: '', // Pas de japonais pour l'instant
+      theme: theme,
+      langue: 'anglais' // Par défaut pour ajout.js
+    };
+    
+    const validation = DataValidator.validateCard(cardData);
+    
+    if (!validation.isValid) {
+      let errorMessage = '❌ Erreurs de validation:\n';
+      Object.entries(validation.errors).forEach(([field, errors]) => {
+        errorMessage += `• ${field}: ${errors.join(', ')}\n`;
+      });
+      showMessage(errorMessage, 'error');
       return;
     }
     
-    if (!themes[theme]) themes[theme] = [];
-    themes[theme].push({ en, fr });
+    // Utilise les données sanitizées
+    const sanitizedCard = validation.sanitizedCard;
+    
+    if (!themes[sanitizedCard.theme]) themes[sanitizedCard.theme] = [];
+    
+    // SÉCURITÉ: Utilise les données sanitizées au lieu des données brutes
+    themes[sanitizedCard.theme].push({ 
+      en: sanitizedCard.en, 
+      fr: sanitizedCard.fr,
+      langue: sanitizedCard.langue
+    });
+    
+    console.log('✅ [Ajout] Carte validée et sanitizée:', sanitizedCard);
     saveThemes(themes);
     updateThemeSelect();
     form.reset();
     
-    showMessage(`✅ Carte "${en} → ${fr}" ajoutée au thème "${theme}" !`, 'success');
+    showMessage(`✅ Carte "${sanitizedCard.en} → ${sanitizedCard.fr}" ajoutée au thème "${sanitizedCard.theme}" !`, 'success');
   };
 
   function showMessage(text, type, element = null) {
@@ -109,4 +135,58 @@ document.addEventListener('DOMContentLoaded', () => {
       addMsg.style.display = 'none';
     }, 4000);
   }
+
+  /**
+   * Validation en temps réel des champs
+   */
+  function setupLiveValidation() {
+    const fields = [
+      { id: 'enWord', type: 'word', label: 'Mot anglais' },
+      { id: 'frWord', type: 'word', label: 'Mot français' },
+      { id: 'newTheme', type: 'theme', label: 'Nouveau thème' }
+    ];
+    
+    fields.forEach(field => {
+      const input = document.getElementById(field.id);
+      if (!input) return;
+      
+      // Validation à la frappe
+      input.addEventListener('input', function() {
+        const validation = DataValidator.validate(this.value, field.type);
+        
+        // Style visuel selon validation
+        if (this.value.trim() === '') {
+          // Champ vide - style neutre
+          this.style.borderColor = '';
+          this.style.boxShadow = '';
+          this.title = '';
+        } else if (validation.isValid) {
+          // Valide - bordure verte
+          this.style.borderColor = '#28a745';
+          this.style.boxShadow = '0 0 0 0.2rem rgba(40, 167, 69, 0.25)';
+          this.title = '✅ Format valide';
+        } else {
+          // Invalide - bordure rouge
+          this.style.borderColor = '#dc3545';
+          this.style.boxShadow = '0 0 0 0.2rem rgba(220, 53, 69, 0.25)';
+          this.title = '❌ ' + validation.errors.join(', ');
+        }
+      });
+      
+      // Validation à la perte de focus
+      input.addEventListener('blur', function() {
+        if (this.value.trim() !== '') {
+          const validation = DataValidator.validate(this.value, field.type);
+          if (validation.isValid && validation.sanitizedValue !== this.value) {
+            // Applique la sanitization automatiquement
+            this.value = validation.sanitizedValue;
+            console.log(`🧹 [Validation] ${field.label} sanitizé:`, validation.sanitizedValue);
+          }
+        }
+      });
+    });
+  }
+
+  // Configuration des validations
+  setupLiveValidation();
 });

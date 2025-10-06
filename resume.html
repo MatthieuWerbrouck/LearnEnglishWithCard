@@ -116,6 +116,22 @@
   </div>
   <script>
     // ================================
+    // SÉCURITÉ - FONCTIONS UTILITAIRES
+    // ================================
+    
+    /**
+     * Échappe les caractères HTML dangereux
+     */
+    function escapeHtml(unsafe) {
+      return String(unsafe)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // ================================
     // SYSTÈME D'HISTORIQUE AVANCÉ
     // ================================
 
@@ -232,13 +248,26 @@
       const historyDiv = document.getElementById('scoreHistory');
       
       if (filtered.length === 0 && legacyHistory.length === 0) {
-        historyDiv.innerHTML = `
-          <div style="text-align: center; padding: 40px; background: rgba(102, 126, 234, 0.05); border-radius: 16px; color: #6b7280;">
-            <div style="font-size: 3rem; margin-bottom: 16px;">📋</div>
-            <h3 style="margin-bottom: 8px;">Aucune évaluation trouvée</h3>
-            <p>Commencez votre première évaluation pour voir vos statistiques ici !</p>
-          </div>
-        `;
+        // SÉCURISATION: Création sécurisée au lieu d'innerHTML dangereux
+        historyDiv.innerHTML = '';
+        const emptyDiv = document.createElement('div');
+        emptyDiv.style.cssText = 'text-align: center; padding: 40px; background: rgba(102, 126, 234, 0.05); border-radius: 16px; color: #6b7280;';
+        
+        const emoji = document.createElement('div');
+        emoji.textContent = '📋';
+        emoji.style.cssText = 'font-size: 3rem; margin-bottom: 16px;';
+        
+        const title = document.createElement('h3');
+        title.textContent = 'Aucune évaluation trouvée';
+        title.style.cssText = 'margin-bottom: 8px;';
+        
+        const text = document.createElement('p');
+        text.textContent = 'Commencez votre première évaluation pour voir vos statistiques ici !';
+        
+        emptyDiv.appendChild(emoji);
+        emptyDiv.appendChild(title);
+        emptyDiv.appendChild(text);
+        historyDiv.appendChild(emptyDiv);
         return;
       }
 
@@ -472,19 +501,63 @@
       const modes = [...new Set(history.map(s => s.mode).filter(mode => mode))];
       const languages = [...new Set(history.map(s => s.language).filter(lang => lang))];
       
-      // Mise à jour filtre mode
+      // SÉCURISATION: Mise à jour filtre mode
       const modeSelect = document.getElementById('modeFilter');
       modeSelect.innerHTML = '<option value="all">Tous les modes</option>';
       modes.forEach(mode => {
-        modeSelect.innerHTML += `<option value="${mode}">${formatMode(mode)}</option>`;
+        const option = document.createElement('option');
+        option.value = escapeHtml(mode);
+        option.textContent = formatMode(mode);
+        modeSelect.appendChild(option);
       });
       
-      // Mise à jour filtre langue
+      // SÉCURISATION: Mise à jour filtre langue
       const langSelect = document.getElementById('langFilter');
       langSelect.innerHTML = '<option value="all">Toutes les langues</option>';
       languages.forEach(lang => {
-        langSelect.innerHTML += `<option value="${lang}">${lang.charAt(0).toUpperCase() + lang.slice(1)}</option>`;
+        const option = document.createElement('option');
+        option.value = escapeHtml(lang);
+        option.textContent = escapeHtml(lang.charAt(0).toUpperCase() + lang.slice(1));
+        langSelect.appendChild(option);
       });
+    }
+
+    // ================================
+    // FONCTIONS SÉCURISÉES POUR DOM
+    // ================================
+    
+    /**
+     * Crée une grille de statistiques de façon sécurisée
+     */
+    function createSecureStatsGrid(stats) {
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;';
+      
+      const statsData = [
+        { value: stats.totalSessions, label: 'Évaluations', gradient: 'linear-gradient(135deg, #28a745, #20c997)' },
+        { value: stats.avgScore + '%', label: 'Score moyen', gradient: 'linear-gradient(135deg, #007bff, #0056b3)' },
+        { value: stats.totalQuestions, label: 'Questions totales', gradient: 'linear-gradient(135deg, #6f42c1, #5a2d91)' },
+        { value: stats.timeSpent + 'min', label: 'Temps total', gradient: 'linear-gradient(135deg, #fd7e14, #e55a4d)' }
+      ];
+      
+      statsData.forEach(stat => {
+        const card = document.createElement('div');
+        card.className = 'stat-card';
+        card.style.cssText = `background: ${stat.gradient}; color: white; padding: 20px; border-radius: 12px; text-align: center;`;
+        
+        const value = document.createElement('div');
+        value.textContent = escapeHtml(String(stat.value));
+        value.style.cssText = 'font-size: 2rem; font-weight: bold;';
+        
+        const label = document.createElement('div');
+        label.textContent = escapeHtml(stat.label);
+        
+        card.appendChild(value);
+        card.appendChild(label);
+        grid.appendChild(card);
+      });
+      
+      return grid;
     }
 
     // Initialisation

@@ -54,9 +54,15 @@ function saveEvaluationSession(sessionData) {
       history.splice(MAX_HISTORY_ENTRIES);
     }
     
-    // Sauvegarde
-    localStorage.setItem(EVALUATION_HISTORY_KEY, JSON.stringify(history));
-    console.log(`💾 [Evaluation] Session sauvegardée: ${sessionData.score}/${sessionData.totalQuestions} (${sessionData.percentage}%)`);
+    // Sauvegarde sécurisée avec SafeStorage
+    try {
+      SafeStorage.setItem(EVALUATION_HISTORY_KEY, history, { autoCleanup: true });
+      console.log(`💾 [Evaluation] Session sauvegardée: ${sessionData.score}/${sessionData.totalQuestions} (${sessionData.percentage}%)`);
+    } catch (storageError) {
+      console.error('❌ [Evaluation] Erreur stockage sécurisé:', storageError);
+      // Fallback vers localStorage classique
+      localStorage.setItem(EVALUATION_HISTORY_KEY, JSON.stringify(history));
+    }
     
     return sessionEntry.id;
     
@@ -283,59 +289,94 @@ function getCachedData() {
 
 function setCachedData(data) {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-    localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-    console.log('✅ Données mises en cache pour 30 minutes');
+    // Utilisation de SafeStorage pour la mise en cache
+    SafeStorage.setItem(CACHE_KEY, data, { autoCleanup: true });
+    SafeStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now(), { autoCleanup: true });
+    console.log('✅ Données mises en cache pour 30 minutes avec SafeStorage');
   } catch (error) {
-    console.warn('Erreur lors de la mise en cache:', error);
+    console.warn('⚠️ Erreur SafeStorage, fallback localStorage:', error);
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+    } catch (fallbackError) {
+      console.error('❌ Erreur lors de la mise en cache (fallback):', fallbackError);
+    }
   }
 }
 
 function loadSheetDBData() {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
+    const cacheKey = 'sheetdb_data';
+    
     // 1. Vérifier le cache global en mémoire
     if (sheetDBData) {
-      console.log('📦 Utilisation des données en mémoire');
+      console.log('📦 [Performance] Utilisation des données en mémoire');
       resolve(sheetDBData);
       return;
     }
     
-    // 2. Vérifier le cache localStorage
+    // 2. NOUVEAU: Vérifier le cache optimisé PerformanceOptimizer
+    const optimizedCached = PerformanceOptimizer.getCacheItem(cacheKey);
+    if (optimizedCached) {
+      console.log('� [Performance] Cache optimisé utilisé');
+      sheetDBData = optimizedCached;
+      resolve(optimizedCached);
+      return;
+    }
+    
+    // 3. Fallback: Vérifier le cache localStorage legacy
     const cachedData = getCachedData();
     if (cachedData) {
-      console.log('💾 Utilisation des données en cache (localStorage)');
+      console.log('💾 [Performance] Cache legacy utilisé');
       sheetDBData = cachedData;
+      // Migrer vers le cache optimisé
+      PerformanceOptimizer.setCacheItem(cacheKey, cachedData, 30);
       resolve(cachedData);
       return;
     }
     
-    // 3. Vérifier si les données sont déjà en cours de chargement
+    // 4. Vérifier si les données sont déjà en cours de chargement
     if (window.sheetDBPromise) {
-      console.log('⏳ Utilisation du chargement en cours...');
+      console.log('⏳ [Performance] Utilisation du chargement en cours...');
       window.sheetDBPromise.then(resolve).catch(reject);
       return;
     }
     
-    // 4. Charger depuis l'API en dernier recours
-    console.log('🌐 Chargement depuis SheetDB (nouvel appel API)');
-    window.sheetDBPromise = fetch('https://sheetdb.io/api/v1/xg3dj9vsovufe')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    // 5. OPTIMISÉ: Charger depuis l'API avec retry et optimisations
+    console.log('🌐 [Performance] Chargement optimisé depuis SheetDB');
+    
+    try {
+      window.sheetDBPromise = PerformanceOptimizer.optimizedFetch(
+        'https://sheetdb.io/api/v1/xg3dj9vsovufe',
+        {
+          timeout: 15000, // 15 secondes
+          retries: 2,
+          retryDelay: 2000 // 2 secondes
         }
-        return response.json();
-      })
+      )
+      .then(response => response.json())
       .then(data => {
+        console.log('✅ [Performance] Données SheetDB chargées avec succès');
         sheetDBData = data;
-        setCachedData(data);
-        window.sheetDBPromise = null; // Libère la promesse
+        
+        // Cache dans les deux systèmes
+        setCachedData(data); // Legacy
+        PerformanceOptimizer.setCacheItem(cacheKey, data, 30); // Optimisé
+        
+        window.sheetDBPromise = null;
         return data;
       })
       .catch(error => {
-        console.error('❌ Erreur lors du chargement:', error);
+        console.error('❌ [Performance] Erreur chargement SheetDB:', error);
         window.sheetDBPromise = null;
         throw error;
       });
+      
+    } catch (error) {
+      console.error('❌ [Performance] Erreur configuration requête:', error);
+      reject(error);
+      return;
+    }
     
     window.sheetDBPromise.then(resolve).catch(reject);
   });
@@ -348,7 +389,12 @@ window.addEventListener('DOMContentLoaded', function() {
   function processData(data) {
     // Extrait toutes les langues uniques
     const langs = [...new Set(data.map(card => card.langue && card.langue.trim()).filter(Boolean))];
-    langSelectDiv.innerHTML = '<h2>Sélectionnez la langue à étudier :</h2>';
+    // Sécurisation: Remplace innerHTML par création sécurisée
+    langSelectDiv.innerHTML = '';
+    const title = DOMUtils.createSafeElement('h2', {
+      textContent: 'Sélectionnez la langue à étudier :'
+    });
+    langSelectDiv.appendChild(title);
     langs.forEach(lang => {
       const btn = document.createElement('button');
       btn.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
@@ -367,12 +413,38 @@ window.addEventListener('DOMContentLoaded', function() {
     const modeDiv = document.getElementById('modeSelectDiv');
     if (!modeDiv) return;
     modeDiv.style.display = '';
-    modeDiv.innerHTML = `
-      <h2>Choisissez le type d'évaluation :</h2>
-      <button class="main-btn" style="margin:12px;" data-mode="qcm_fr_lang">QCM : mot français, choix langue étudiée</button>
-      <button class="main-btn" style="margin:12px;" data-mode="qcm_lang_fr">QCM : mot langue étudiée, choix français</button>
-      <button class="main-btn" style="margin:12px;" data-mode="libre">Réponse libre : mot langue étudiée</button>
-    `;
+    // Sécurisation: Remplace innerHTML dangereux par création sécurisée
+    modeDiv.innerHTML = '';
+    
+    const title = DOMUtils.createSafeElement('h2', {
+      textContent: 'Choisissez le type d\'évaluation :'
+    });
+    
+    const btn1 = DOMUtils.createSafeElement('button', {
+      className: 'main-btn',
+      textContent: 'QCM : mot français, choix langue étudiée',
+      attributes: { 'data-mode': 'qcm_fr_lang' },
+      style: { margin: '12px' }
+    });
+    
+    const btn2 = DOMUtils.createSafeElement('button', {
+      className: 'main-btn',
+      textContent: 'QCM : mot langue étudiée, choix français',
+      attributes: { 'data-mode': 'qcm_lang_fr' },
+      style: { margin: '12px' }
+    });
+    
+    const btn3 = DOMUtils.createSafeElement('button', {
+      className: 'main-btn', 
+      textContent: 'Réponse libre : mot langue étudiée',
+      attributes: { 'data-mode': 'libre' },
+      style: { margin: '12px' }
+    });
+    
+    modeDiv.appendChild(title);
+    modeDiv.appendChild(btn1);
+    modeDiv.appendChild(btn2);
+    modeDiv.appendChild(btn3);
     Array.from(modeDiv.querySelectorAll('button')).forEach(btn => {
       btn.onclick = function() {
         window.selectedEvalMode = btn.getAttribute('data-mode');
@@ -390,7 +462,12 @@ window.addEventListener('DOMContentLoaded', function() {
     // Ré-affiche le bouton "Retour" du HTML
     const htmlReturnBtn = document.querySelector('button[onclick*="index.html"]');
     if (htmlReturnBtn) htmlReturnBtn.style.display = '';
-    themeDiv.innerHTML = '<h2>Choisissez un ou plusieurs thèmes :</h2>';
+    // Sécurisation: Remplace innerHTML par création sécurisée
+    themeDiv.innerHTML = '';
+    const title = DOMUtils.createSafeElement('h2', { 
+      textContent: 'Choisissez un ou plusieurs thèmes :' 
+    });
+    themeDiv.appendChild(title);
 
     // Ajout de la barre de recherche
     const searchInput = document.createElement('input');
@@ -423,15 +500,18 @@ window.addEventListener('DOMContentLoaded', function() {
 
     // Fonction pour afficher les thèmes filtrés
     function renderThemeCheckboxes(filteredThemes) {
-      // Supprime les anciens checkboxes
+      // Sécurisation: Supprime les anciens checkboxes
       scrollContainer.innerHTML = '';
       filteredThemes.forEach(theme => {
-        const label = document.createElement('label');
-        label.style.display = 'block';
-        label.style.marginBottom = '6px';
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.value = theme;
+        const label = DOMUtils.createSafeElement('label', {
+          style: { display: 'block', marginBottom: '6px' }
+        });
+        const checkbox = DOMUtils.createSafeElement('input', {
+          attributes: {
+            type: 'checkbox',
+            value: theme
+          }
+        });
         if (checkedThemes.includes(theme)) checkbox.checked = true;
         checkbox.onchange = function() {
           if (checkbox.checked) {
@@ -446,9 +526,12 @@ window.addEventListener('DOMContentLoaded', function() {
           card.langue && card.langue.trim() === window.selectedLang &&
           card.theme && card.theme.trim() === theme
         ).length;
-        label.title = `${wordCount} mot${wordCount > 1 ? 's' : ''} dans ce thème`;
+        // Sécurisation: Échappe le contenu du tooltip
+        label.title = DOMUtils.escapeHtml(`${wordCount} mot${wordCount > 1 ? 's' : ''} dans ce thème`);
         label.appendChild(checkbox);
-        label.appendChild(document.createTextNode(' ' + theme));
+        // Sécurisation: Utilise textContent au lieu de concaténation directe
+        const themeText = document.createTextNode(' ' + DOMUtils.escapeHtml(theme));
+        label.appendChild(themeText);
         scrollContainer.appendChild(label);
       });
       updateQuestionCountDefault();
@@ -560,19 +643,62 @@ window.addEventListener('DOMContentLoaded', function() {
     const htmlReturnBtn = document.querySelector('button[onclick*="index.html"]');
     if (htmlReturnBtn) htmlReturnBtn.style.display = 'none';
 
-    summaryDiv.innerHTML = `
-      <h2 style="margin-bottom:18px;">Résumé de l'évaluation</h2>
-      <div><b>Langue étudiée :</b> ${window.selectedLang ? window.selectedLang.charAt(0).toUpperCase() + window.selectedLang.slice(1) : ''}</div>
-      <div style="margin-top:8px;"><b>Mode :</b> ${
-        window.selectedEvalMode === 'qcm_fr_lang' ? 'QCM : mot français, choix langue étudiée' :
-        window.selectedEvalMode === 'qcm_lang_fr' ? 'QCM : mot langue étudiée, choix français' :
-        window.selectedEvalMode === 'libre' ? 'Réponse libre : mot langue étudiée' : ''
-      }</div>
-      <div style="margin-top:8px;"><b>Thèmes :</b> ${window.selectedThemes ? window.selectedThemes.join(', ') : ''}</div>
-      <div style="margin-top:8px;"><b>Nombre de questions :</b> ${window.selectedQuestionCount || 1}</div>
-      <button id="startEvalBtn" class="main-btn" style="margin-top:24px;width:100%;">Démarrer l'évaluation</button>
-      <button id="backEvalBtn" class="main-btn" style="margin-top:16px;width:100%;">Retour</button>
-    `;
+    // Sécurisation: Remplace innerHTML dangereux par création sécurisée
+    summaryDiv.innerHTML = '';
+    
+    const title = DOMUtils.createSafeElement('h2', {
+      textContent: 'Résumé de l\'évaluation',
+      style: { marginBottom: '18px' }
+    });
+    
+    const langDiv = DOMUtils.createSafeElement('div');
+    langDiv.innerHTML = '<b>Langue étudiée :</b> ';
+    const langText = DOMUtils.escapeHtml(window.selectedLang ? window.selectedLang.charAt(0).toUpperCase() + window.selectedLang.slice(1) : '');
+    langDiv.appendChild(document.createTextNode(langText));
+    
+    const modeInfoDiv = DOMUtils.createSafeElement('div', {
+      style: { marginTop: '8px' }
+    });
+    modeInfoDiv.innerHTML = '<b>Mode :</b> ';
+    const modeText = window.selectedEvalMode === 'qcm_fr_lang' ? 'QCM : mot français, choix langue étudiée' :
+      window.selectedEvalMode === 'qcm_lang_fr' ? 'QCM : mot langue étudiée, choix français' :
+      window.selectedEvalMode === 'libre' ? 'Réponse libre : mot langue étudiée' : '';
+    modeInfoDiv.appendChild(document.createTextNode(DOMUtils.escapeHtml(modeText)));
+    
+    const themesDiv = DOMUtils.createSafeElement('div', {
+      style: { marginTop: '8px' }
+    });
+    themesDiv.innerHTML = '<b>Thèmes :</b> ';
+    const themesText = window.selectedThemes ? window.selectedThemes.join(', ') : '';
+    themesDiv.appendChild(document.createTextNode(DOMUtils.escapeHtml(themesText)));
+    
+    const countDiv = DOMUtils.createSafeElement('div', {
+      style: { marginTop: '8px' }
+    });
+    countDiv.innerHTML = '<b>Nombre de questions :</b> ';
+    countDiv.appendChild(document.createTextNode(String(window.selectedQuestionCount || 1)));
+    
+    const startBtn = DOMUtils.createSafeElement('button', {
+      attributes: { id: 'startEvalBtn' },
+      className: 'main-btn',
+      textContent: 'Démarrer l\'évaluation',
+      style: { marginTop: '24px', width: '100%' }
+    });
+    
+    const backBtn = DOMUtils.createSafeElement('button', {
+      attributes: { id: 'backEvalBtn' },
+      className: 'main-btn', 
+      textContent: 'Retour',
+      style: { marginTop: '16px', width: '100%' }
+    });
+    
+    summaryDiv.appendChild(title);
+    summaryDiv.appendChild(langDiv);
+    summaryDiv.appendChild(modeInfoDiv);
+    summaryDiv.appendChild(themesDiv);
+    summaryDiv.appendChild(countDiv);
+    summaryDiv.appendChild(startBtn);
+    summaryDiv.appendChild(backBtn);
     summaryDiv.style.display = '';
 
     document.getElementById('startEvalBtn').onclick = function() {
@@ -619,6 +745,36 @@ let evaluationStartTime = null;
 let questionStartTime = null;
 
 function startEvaluation() {
+  // VALIDATION DES DONNÉES D'ÉVALUATION
+  const evalData = {
+    mode: window.selectedEvalMode,
+    language: window.selectedLang,
+    themes: window.selectedThemes,
+    questionCount: window.selectedQuestionCount
+  };
+  
+  const validation = DataValidator.validateEvaluationData(evalData);
+  
+  if (!validation.isValid) {
+    console.error('❌ [Evaluation] Données invalides:', validation.results);
+    DOMUtils.createModal({
+      title: '❌ Erreur de validation',
+      content: 'Les paramètres d\'évaluation sont invalides. Veuillez recommencer.',
+      type: 'error',
+      closeButton: true
+    });
+    return;
+  }
+  
+  // Utilise les données validées et sanitizées
+  const sanitizedData = validation.sanitizedData;
+  window.selectedEvalMode = sanitizedData.mode;
+  window.selectedLang = sanitizedData.language;
+  window.selectedThemes = sanitizedData.themes;
+  window.selectedQuestionCount = sanitizedData.questionCount;
+  
+  console.log('✅ [Evaluation] Données validées:', sanitizedData);
+  
   // Démarrage du chrono de session
   evaluationStartTime = Date.now();
   console.log('⏱️ [Evaluation] Session démarrée');
@@ -688,40 +844,144 @@ function initEvaluationInterface() {
   // Crée l'interface d'évaluation
   const evalDiv = document.createElement('div');
   evalDiv.id = 'evaluationInterface';
-  evalDiv.innerHTML = `
-    <div id="progressBar" style="margin-bottom: 24px;">
-      <div style="font-size: 1.1em; margin-bottom: 8px; text-align: center;">
-        <span id="questionCounter">Question 1/${evaluationQuestions.length}</span>
-      </div>
-      <div style="background: #eee; border-radius: 10px; height: 8px; margin-bottom: 16px;">
-        <div id="progressFill" style="background: #4CAF50; height: 100%; border-radius: 10px; width: ${100/evaluationQuestions.length}%; transition: width 0.3s ease;"></div>
-      </div>
-    </div>
-    
-    <div id="questionCard" class="flashcard" style="margin-bottom: 24px; padding: 24px; background: #f8f9fa; border-radius: 12px; text-align: center;">
-      <div id="questionText" style="font-size: 1.4em; margin-bottom: 20px; color: #333;"></div>
-      <div id="questionContent"></div>
-    </div>
-    
-    <div id="answerSection" style="margin-bottom: 24px;"></div>
-    
-    <div id="feedbackSection" style="margin-bottom: 24px; min-height: 60px;"></div>
-    
-    <div id="navigationSection" style="text-align: center;">
-      <button id="validateBtn" class="main-btn" style="margin-right: 12px;">Valider</button>
-      <button id="nextQuestionBtn" class="main-btn" style="display: none;">Question suivante</button>
-      <button id="finishEvalBtn" class="main-btn" style="display: none;">Voir les résultats</button>
-    </div>
-    
-    <div style="text-align: center; margin-top: 20px; border-top: 2px solid rgba(102, 126, 234, 0.1); padding-top: 20px;">
-      <button id="cancelEvalBtn" class="nav-btn" 
-              style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: #dc2626; transition: all 0.3s ease;"
-              onmouseover="this.style.background='rgba(239, 68, 68, 0.2)'; this.style.borderColor='rgba(239, 68, 68, 0.5)'; this.style.transform='translateY(-1px)'"
-              onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'; this.style.borderColor='rgba(239, 68, 68, 0.3)'; this.style.transform='translateY(0)'">
-        ❌ Annuler l'évaluation
-      </button>
-    </div>
-  `;
+  // Sécurisation: Remplace innerHTML dangereux par création sécurisée
+  const progressBar = DOMUtils.createSafeElement('div', {
+    attributes: { id: 'progressBar' },
+    style: { marginBottom: '24px' }
+  });
+  
+  const progressCounter = DOMUtils.createSafeElement('div', {
+    style: { fontSize: '1.1em', marginBottom: '8px', textAlign: 'center' }
+  });
+  
+  const questionCounterSpan = DOMUtils.createSafeElement('span', {
+    attributes: { id: 'questionCounter' },
+    textContent: `Question 1/${evaluationQuestions.length}`
+  });
+  
+  const progressContainer = DOMUtils.createSafeElement('div', {
+    style: { 
+      background: '#eee', 
+      borderRadius: '10px', 
+      height: '8px', 
+      marginBottom: '16px' 
+    }
+  });
+  
+  const progressFill = DOMUtils.createSafeElement('div', {
+    attributes: { id: 'progressFill' },
+    style: {
+      background: '#4CAF50',
+      height: '100%',
+      borderRadius: '10px',
+      width: `${100/evaluationQuestions.length}%`,
+      transition: 'width 0.3s ease'
+    }
+  });
+  
+  progressCounter.appendChild(questionCounterSpan);
+  progressContainer.appendChild(progressFill);
+  progressBar.appendChild(progressCounter);
+  progressBar.appendChild(progressContainer);
+  evalDiv.appendChild(progressBar);
+  
+  // Sécurisation: Création sécurisée des éléments restants
+  const questionCard = DOMUtils.createSafeElement('div', {
+    attributes: { id: 'questionCard' },
+    className: 'flashcard',
+    style: {
+      marginBottom: '24px',
+      padding: '24px',
+      background: '#f8f9fa',
+      borderRadius: '12px',
+      textAlign: 'center'
+    }
+  });
+  
+  const questionText = DOMUtils.createSafeElement('div', {
+    attributes: { id: 'questionText' },
+    style: {
+      fontSize: '1.4em',
+      marginBottom: '20px',
+      color: '#333'
+    }
+  });
+  
+  const questionContent = DOMUtils.createSafeElement('div', {
+    attributes: { id: 'questionContent' }
+  });
+  
+  questionCard.appendChild(questionText);
+  questionCard.appendChild(questionContent);
+  
+  const answerSection = DOMUtils.createSafeElement('div', {
+    attributes: { id: 'answerSection' },
+    style: { marginBottom: '24px' }
+  });
+  
+  const feedbackSection = DOMUtils.createSafeElement('div', {
+    attributes: { id: 'feedbackSection' },
+    style: { marginBottom: '24px', minHeight: '60px' }
+  });
+  
+  const navigationSection = DOMUtils.createSafeElement('div', {
+    attributes: { id: 'navigationSection' },
+    style: { textAlign: 'center' }
+  });
+  
+  const validateBtn = DOMUtils.createSafeElement('button', {
+    attributes: { id: 'validateBtn' },
+    className: 'main-btn',
+    textContent: 'Valider',
+    style: { marginRight: '12px' }
+  });
+  
+  const nextBtn = DOMUtils.createSafeElement('button', {
+    attributes: { id: 'nextQuestionBtn' },
+    className: 'main-btn',
+    textContent: 'Question suivante',
+    style: { display: 'none' }
+  });
+  
+  const finishBtn = DOMUtils.createSafeElement('button', {
+    attributes: { id: 'finishEvalBtn' },
+    className: 'main-btn', 
+    textContent: 'Voir les résultats',
+    style: { display: 'none' }
+  });
+  
+  navigationSection.appendChild(validateBtn);
+  navigationSection.appendChild(nextBtn);
+  navigationSection.appendChild(finishBtn);
+  
+  const cancelDiv = DOMUtils.createSafeElement('div', {
+    style: {
+      textAlign: 'center',
+      marginTop: '20px',
+      borderTop: '2px solid rgba(102, 126, 234, 0.1)',
+      paddingTop: '20px'
+    }
+  });
+  
+  const cancelBtn = DOMUtils.createSafeElement('button', {
+    attributes: { id: 'cancelEvalBtn' },
+    className: 'nav-btn',
+    textContent: '❌ Annuler l\'évaluation',
+    style: {
+      background: 'rgba(239, 68, 68, 0.1)',
+      borderColor: 'rgba(239, 68, 68, 0.3)',
+      color: '#dc2626',
+      transition: 'all 0.3s ease'
+    }
+  });
+  
+  cancelDiv.appendChild(cancelBtn);
+  
+  evalDiv.appendChild(questionCard);
+  evalDiv.appendChild(answerSection);
+  evalDiv.appendChild(feedbackSection);
+  evalDiv.appendChild(navigationSection);
+  evalDiv.appendChild(cancelDiv);
   
   parent.appendChild(evalDiv);
 }
@@ -744,8 +1004,11 @@ function showQuestion(questionIndex) {
   document.getElementById('progressFill').style.width = `${progressPercent}%`;
   
   // Nettoie les sections précédentes
-  document.getElementById('answerSection').innerHTML = '';
-  document.getElementById('feedbackSection').innerHTML = '';
+  // Sécurisation: Utilise un nettoyage sécurisé
+  const answerSection = document.getElementById('answerSection');
+  const feedbackSection = document.getElementById('feedbackSection');
+  if (answerSection) answerSection.innerHTML = '';
+  if (feedbackSection) feedbackSection.innerHTML = '';
   document.getElementById('validateBtn').style.display = '';
   document.getElementById('nextQuestionBtn').style.display = 'none';
   document.getElementById('finishEvalBtn').style.display = 'none';
@@ -765,18 +1028,29 @@ function showQuestion(questionIndex) {
 }
 
 function showQCMQuestion_FrenchToLang(question) {
-  // Affiche le mot français
-  document.getElementById('questionText').textContent = `Quelle est la traduction de "${question.fr}" ?`;
+  // Sécurisation: Affiche le mot français
+  const questionTextEl = document.getElementById('questionText');
+  if (questionTextEl) {
+    questionTextEl.textContent = `Quelle est la traduction de "${DOMUtils.escapeHtml(question.fr)}" ?`;
+  }
   
   // Génère les choix multiples
   const correctAnswer = question[window.currentLangKey];
   const distractors = generateDistractors(question, window.currentLangKey, 3);
   const choices = [correctAnswer, ...distractors].sort(() => Math.random() - 0.5);
   
-  // Affiche les boutons de choix
+  // Sécurisation: Affiche les boutons de choix
   const answerSection = document.getElementById('answerSection');
-  answerSection.innerHTML = '<div style="display: grid; gap: 12px; max-width: 400px; margin: 0 auto;"></div>';
-  const choicesContainer = answerSection.firstChild;
+  answerSection.innerHTML = '';
+  const choicesContainer = DOMUtils.createSafeElement('div', {
+    style: {
+      display: 'grid',
+      gap: '12px',
+      maxWidth: '400px',
+      margin: '0 auto'
+    }
+  });
+  answerSection.appendChild(choicesContainer);
   
   choices.forEach((choice, index) => {
     const button = document.createElement('button');
@@ -832,18 +1106,29 @@ function selectChoice(selectedButton, allChoices, correctAnswer) {
 }
 
 function showQCMQuestion_LangToFrench(question) {
-  // Affiche le mot dans la langue étudiée
-  document.getElementById('questionText').textContent = `Quelle est la traduction française de "${question[window.currentLangKey]}" ?`;
+  // Sécurisation: Affiche le mot dans la langue étudiée
+  const questionTextEl = document.getElementById('questionText');
+  if (questionTextEl) {
+    questionTextEl.textContent = `Quelle est la traduction française de "${DOMUtils.escapeHtml(question[window.currentLangKey])}" ?`;
+  }
   
   // Génère les choix multiples
   const correctAnswer = question.fr;
   const distractors = generateDistractors(question, 'fr', 3);
   const choices = [correctAnswer, ...distractors].sort(() => Math.random() - 0.5);
   
-  // Affiche les boutons de choix
+  // Sécurisation: Affiche les boutons de choix
   const answerSection = document.getElementById('answerSection');
-  answerSection.innerHTML = '<div style="display: grid; gap: 12px; max-width: 400px; margin: 0 auto;"></div>';
-  const choicesContainer = answerSection.firstChild;
+  answerSection.innerHTML = '';
+  const choicesContainer = DOMUtils.createSafeElement('div', {
+    style: {
+      display: 'grid',
+      gap: '12px',
+      maxWidth: '400px',
+      margin: '0 auto'
+    }
+  });
+  answerSection.appendChild(choicesContainer);
   
   choices.forEach((choice, index) => {
     const button = document.createElement('button');
@@ -1234,6 +1519,87 @@ function cancelEvaluation() {
     location.reload();
   }
 }
+
+/**
+ * Affiche les informations de stockage pour debug et monitoring
+ */
+function showStorageInfo() {
+  if (typeof SafeStorage !== 'undefined') {
+    const info = SafeStorage.getStorageInfo();
+    console.log('📊 [Storage] Informations de stockage:', {
+      usage: info.sizeFormatted,
+      percentage: info.usagePercent + '%',
+      items: `${info.itemCount}/${info.maxItems}`,
+      available: info.available
+    });
+    
+    // Alerte si stockage critique
+    if (info.usagePercent > 80) {
+      console.warn('⚠️ [Storage] Stockage critique! Nettoyage recommandé.');
+      SafeStorage.cleanup();
+    }
+  }
+}
+
+/**
+ * Dashboard de performance et métriques
+ */
+function showPerformanceDashboard() {
+  if (typeof PerformanceOptimizer === 'undefined') return;
+  
+  const report = PerformanceOptimizer.getPerformanceReport();
+  const storageInfo = SafeStorage.getStorageInfo();
+  
+  console.group('📊 DASHBOARD PERFORMANCE');
+  console.log('🚀 Cache Performance:', {
+    efficiency: report.cacheEfficiency,
+    hits: report.cacheHits,
+    misses: report.cacheMisses,
+    size: report.cacheSize + ' items'
+  });
+  
+  console.log('⚡ Network Performance:', {
+    averageLoadTime: report.averageLoadTime,
+    compressionRatio: report.compressionRatio
+  });
+  
+  console.log('💾 Storage Status:', {
+    usage: storageInfo.sizeFormatted,
+    percentage: storageInfo.usagePercent + '%',
+    available: storageInfo.available
+  });
+  console.groupEnd();
+  
+  // Alertes automatiques
+  if (storageInfo.usagePercent > 90) {
+    console.warn('🚨 [Performance] Stockage critique! Nettoyage automatique activé.');
+    SafeStorage.cleanup();
+    PerformanceOptimizer.clearExpiredCache();
+  }
+}
+
+// Monitoring automatique et accessibilité
+document.addEventListener('DOMContentLoaded', function() {
+  // Délai pour laisser le temps aux autres scripts de se charger
+  setTimeout(() => {
+    // Performance et stockage
+    showStorageInfo();
+    showPerformanceDashboard();
+    
+    // Accessibilité
+    if (window.AccessibilityEnhancer) {
+      AccessibilityEnhancer.init();
+      console.log('♿ [Evaluation] Accessibilité initialisée');
+    }
+    
+    // Nettoyage périodique (toutes les 30 minutes)
+    setInterval(() => {
+      PerformanceOptimizer.clearExpiredCache();
+      SafeStorage.cleanup();
+    }, 30 * 60 * 1000);
+    
+  }, 1000);
+});
 
 
 

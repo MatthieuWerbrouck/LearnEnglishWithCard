@@ -230,22 +230,55 @@ document.addEventListener('DOMContentLoaded', function() {
 function showErrorMessage(error) {
   const langSelectDiv = document.getElementById('langSelect');
   if (langSelectDiv) {
-    langSelectDiv.innerHTML = `
-      <div style="text-align: center; padding: 24px; background: rgba(239, 68, 68, 0.1); border-radius: 16px; color: #dc2626; backdrop-filter: blur(10px);">
-        <div style="font-size: 3rem; margin-bottom: 16px;">😕</div>
-        <h3 style="margin-bottom: 12px; color: #dc2626;">Oups ! Problème de chargement</h3>
-        <p style="margin-bottom: 16px; color: #6b7280;">
-          Impossible de charger les cartes de révision.<br>
-          Vérifiez votre connexion internet et réessayez.
-        </p>
-        <button class="nav-btn" onclick="location.reload()" style="margin-top: 12px;">
-          🔄 Réessayer
-        </button>
-        <button class="nav-btn" onclick="window.location.href='index.html'" style="margin-left: 12px;">
-          🏠 Retour à l'accueil
-        </button>
-      </div>
-    `;
+    // Sécurisation: Remplace innerHTML dangereux par création sécurisée
+    langSelectDiv.innerHTML = '';
+    
+    const errorContainer = DOMUtils.createSafeElement('div', {
+      style: {
+        textAlign: 'center',
+        padding: '24px',
+        background: 'rgba(239, 68, 68, 0.1)',
+        borderRadius: '16px',
+        color: '#dc2626',
+        backdropFilter: 'blur(10px)'
+      }
+    });
+    
+    const emoji = DOMUtils.createSafeElement('div', {
+      textContent: '😕',
+      style: { fontSize: '3rem', marginBottom: '16px' }
+    });
+    
+    const title = DOMUtils.createSafeElement('h3', {
+      textContent: 'Oups ! Problème de chargement',
+      style: { marginBottom: '12px', color: '#dc2626' }
+    });
+    
+    const message = DOMUtils.createSafeElement('p', {
+      style: { marginBottom: '16px', color: '#6b7280' }
+    });
+    message.innerHTML = 'Impossible de charger les cartes de révision.<br>Vérifiez votre connexion internet et réessayez.';
+    
+    const retryBtn = DOMUtils.createSafeElement('button', {
+      className: 'nav-btn',
+      textContent: '🔄 Réessayer',
+      style: { marginTop: '12px' }
+    });
+    retryBtn.onclick = () => location.reload();
+    
+    const homeBtn = DOMUtils.createSafeElement('button', {
+      className: 'nav-btn',
+      textContent: '🏠 Retour à l\'accueil',
+      style: { marginLeft: '12px' }
+    });
+    homeBtn.onclick = () => window.location.href = 'index.html';
+    
+    errorContainer.appendChild(emoji);
+    errorContainer.appendChild(title);
+    errorContainer.appendChild(message);
+    errorContainer.appendChild(retryBtn);
+    errorContainer.appendChild(homeBtn);
+    langSelectDiv.appendChild(errorContainer);
   }
 }
 
@@ -325,35 +358,79 @@ function showThemes() {
   themeList.innerHTML = '';
   const themeNames = Object.keys(themes);
   
-  themeNames.forEach(theme => {
-    const score = getScoreForTheme(selectedLang, theme);
-    const cardCount = themes[theme].length;
+  // OPTIMISATION: Lazy loading pour grandes listes de thèmes
+  if (themeNames.length > 20) {
+    console.log('🚀 [Performance] Activation du lazy loading pour', themeNames.length, 'thèmes');
     
-    const btn = document.createElement('button');
-    btn.className = 'theme-list button';
-    btn.onclick = () => startRevision(theme);
+    const renderTheme = (theme, index) => {
+      const score = getScoreForTheme(selectedLang, theme);
+      const cardCount = themes[theme].length;
+      
+      const btn = document.createElement('button');
+      btn.className = 'theme-list button';
+      btn.onclick = () => startRevision(theme);
+      
+      // Émoji basé sur le score de performance
+      let emoji = '📖'; // Par défaut
+      let scoreText = 'Nouveau';
+      
+      if (score !== null) {
+        scoreText = `${score}/10`;
+        if (score >= 8) emoji = '🏆'; // Excellent
+        else if (score >= 6) emoji = '⭐'; // Bon
+        else if (score >= 4) emoji = '📈'; // En progression
+        else emoji = '💪'; // À travailler
+      }
+      
+      // Suite du rendu du bouton...
+      btn.innerHTML = DOMUtils.escapeHtml(`${emoji} ${theme} (${cardCount} mots) - Score: ${scoreText}`);
+      return btn;
+    };
     
-    // Émoji basé sur le score de performance
-    let emoji = '📖'; // Par défaut
-    let scoreText = 'Nouveau';
+    // Lazy loader avec batches de 10 thèmes
+    PerformanceOptimizer.createLazyLoader(themeList, themeNames, renderTheme, 10);
     
-    if (score !== null) {
-      scoreText = `${score}/10`;
-      if (score >= 8) emoji = '🏆'; // Excellent
-      else if (score >= 6) emoji = '⭐'; // Bon
-      else if (score >= 4) emoji = '📈'; // En progression
-      else emoji = '💪'; // À travailler
-    }
-    
-    btn.innerHTML = `
-      ${emoji} ${theme}
-      <div style="font-size: 0.85em; color: rgba(255,255,255,0.7); margin-top: 4px;">
-        ${cardCount} cartes • ${scoreText}
-      </div>
-    `;
-    
-    themeList.appendChild(btn);
-  });
+  } else {
+    // Rendu normal pour petites listes
+    themeNames.forEach(theme => {
+      const score = getScoreForTheme(selectedLang, theme);
+      const cardCount = themes[theme].length;
+      
+      const btn = document.createElement('button');
+      btn.className = 'theme-list button';
+      btn.onclick = () => startRevision(theme);
+      
+      // Émoji basé sur le score de performance
+      let emoji = '📖'; // Par défaut
+      let scoreText = 'Nouveau';
+      
+      if (score !== null) {
+        scoreText = `${score}/10`;
+        if (score >= 8) emoji = '🏆'; // Excellent
+        else if (score >= 6) emoji = '⭐'; // Bon
+        else if (score >= 4) emoji = '📈'; // En progression
+        else emoji = '💪'; // À travailler
+      }
+      
+      // SÉCURITÉ: Utilise création sécurisée au lieu d'innerHTML
+      const themeTitle = DOMUtils.createSafeElement('div', {
+        textContent: `${emoji} ${theme}`
+      });
+      
+      const themeInfo = DOMUtils.createSafeElement('div', {
+        textContent: `${cardCount} cartes • ${scoreText}`,
+        style: {
+          fontSize: '0.85em',
+          color: 'rgba(255,255,255,0.7)',
+          marginTop: '4px'
+        }
+      });
+      
+      btn.appendChild(themeTitle);
+      btn.appendChild(themeInfo);
+      themeList.appendChild(btn);
+    });
+  }
   
   console.log(`✅ [Revision] ${themeNames.length} thèmes affichés`);
 }
@@ -612,11 +689,35 @@ function showCard() {
   
   // Masquage des boutons de feedback et réinitialisation
   feedbackButtons.style.display = 'none';
-  feedbackButtons.innerHTML = `
-    <p style="color: #6b7280; margin-bottom: 12px; font-size: 0.9rem;">Connais-tu ce mot ?</p>
-    <button id="knownBtn" class="success-btn" style="margin-right: 8px;">✅ Je connais</button>
-    <button id="unknownBtn" class="danger-btn" style="margin-left: 8px;">❌ Je ne connais pas</button>
-  `;
+  // Sécurisation: Remplace innerHTML par création sécurisée
+  feedbackButtons.innerHTML = '';
+  
+  const feedbackText = DOMUtils.createSafeElement('p', {
+    textContent: 'Connais-tu ce mot ?',
+    style: { 
+      color: '#6b7280', 
+      marginBottom: '12px', 
+      fontSize: '0.9rem' 
+    }
+  });
+  
+  const knownBtn = DOMUtils.createSafeElement('button', {
+    attributes: { id: 'knownBtn' },
+    className: 'success-btn',
+    textContent: '✅ Je connais',
+    style: { marginRight: '8px' }
+  });
+  
+  const unknownBtn = DOMUtils.createSafeElement('button', {
+    attributes: { id: 'unknownBtn' },
+    className: 'danger-btn',
+    textContent: '❌ Je ne connais pas',
+    style: { marginLeft: '8px' }
+  });
+  
+  feedbackButtons.appendChild(feedbackText);
+  feedbackButtons.appendChild(knownBtn);
+  feedbackButtons.appendChild(unknownBtn);
   
   // Nettoyage des timeouts précédents
   if (flipTimeout) {
@@ -787,49 +888,60 @@ function showAnimatedFeedback(message, isPositive) {
   feedbackButtons.style.transition = 'all 0.2s ease-out';
   
   setTimeout(() => {
-    // Remplacement du contenu avec le message de feedback
-    feedbackButtons.innerHTML = `
-      <div class="feedback-message" style="
-        padding: 16px 24px; 
-        background: ${isPositive ? 
+    // SÉCURISATION CRITIQUE: Remplace innerHTML dangereux par création sécurisée
+    feedbackButtons.innerHTML = '';
+    
+    const feedbackMessage = DOMUtils.createSafeElement('div', {
+      className: 'feedback-message',
+      style: {
+        padding: '16px 24px',
+        background: isPositive ? 
           'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 
-          'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-        }; 
-        color: white; 
-        border-radius: 16px; 
-        font-weight: 600;
-        font-size: 1.1rem;
-        box-shadow: 0 8px 25px ${isPositive ? 
-          'rgba(16, 185, 129, 0.3)' : 
-          'rgba(245, 158, 11, 0.3)'
-        };
-        animation: feedbackBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-        position: relative;
-        overflow: hidden;
-      ">
-        <div class="feedback-icon" style="
-          font-size: 1.5rem;
-          margin-bottom: 4px;
-          animation: iconSpin 0.5s ease-out 0.2s;
-        ">
-          ${isPositive ? '🎉' : '🎯'}
-        </div>
-        <div>${message}</div>
-        <div class="feedback-shimmer" style="
-          position: absolute;
-          top: 0;
-          left: -100%;
-          width: 100%;
-          height: 100%;
-          background: linear-gradient(90deg, 
-            transparent, 
-            rgba(255,255,255,0.2), 
-            transparent
-          );
-          animation: shimmer 1s ease-out 0.3s;
-        "></div>
-      </div>
-    `;
+          'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+        color: 'white',
+        borderRadius: '16px',
+        fontWeight: '600',
+        fontSize: '1.1rem',
+        boxShadow: isPositive ? 
+          '0 8px 25px rgba(16, 185, 129, 0.3)' : 
+          '0 8px 25px rgba(245, 158, 11, 0.3)',
+        animation: 'feedbackBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+        position: 'relative',
+        overflow: 'hidden'
+      }
+    });
+    
+    const feedbackIcon = DOMUtils.createSafeElement('div', {
+      className: 'feedback-icon',
+      textContent: isPositive ? '🎉' : '🎯',
+      style: {
+        fontSize: '1.5rem',
+        marginBottom: '4px',
+        animation: 'iconSpin 0.5s ease-out 0.2s'
+      }
+    });
+    
+    const messageDiv = DOMUtils.createSafeElement('div', {
+      textContent: DOMUtils.escapeHtml(String(message))
+    });
+    
+    const shimmer = DOMUtils.createSafeElement('div', {
+      className: 'feedback-shimmer',
+      style: {
+        position: 'absolute',
+        top: '0',
+        left: '-100%',
+        width: '100%',
+        height: '100%',
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+        animation: 'shimmer 1s ease-out 0.3s'
+      }
+    });
+    
+    feedbackMessage.appendChild(feedbackIcon);
+    feedbackMessage.appendChild(messageDiv);
+    feedbackMessage.appendChild(shimmer);
+    feedbackButtons.appendChild(feedbackMessage);
     
     // Animation d'entrée
     feedbackButtons.style.transform = 'scale(1)';

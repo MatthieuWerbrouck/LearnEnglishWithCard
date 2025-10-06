@@ -73,6 +73,16 @@
         }, 2500);
       };
     </script>
+    
+    <script>
+      // Initialisation de l'accessibilité
+      document.addEventListener('DOMContentLoaded', function() {
+        if (window.AccessibilityEnhancer) {
+          AccessibilityEnhancer.init();
+          console.log('♿ [Index] Accessibilité initialisée');
+        }
+      });
+    </script>
   </div>
 </body>
 </html>

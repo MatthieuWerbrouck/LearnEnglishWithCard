@@ -18,6 +18,126 @@ body {
   box-sizing: inherit;
 }
 
+/* === ACCESSIBILITÉ === */
+
+/* Navigation clavier visible */
+.keyboard-navigation *:focus {
+  outline: 3px solid #007bff !important;
+  outline-offset: 2px !important;
+}
+
+/* Skip links */
+.skip-link:focus {
+  position: absolute !important;
+  top: 6px !important;
+  left: 6px !important;
+  background: #000 !important;
+  color: #fff !important;
+  padding: 8px 12px !important;
+  text-decoration: none !important;
+  z-index: 9999 !important;
+  border-radius: 4px !important;
+  font-weight: 600 !important;
+}
+
+/* Mode réduit d'animation */
+.reduced-motion *,
+.reduced-motion *::before,
+.reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Contraste élevé */
+.high-contrast {
+  filter: contrast(150%) saturate(120%);
+}
+
+.high-contrast button,
+.high-contrast input,
+.high-contrast select {
+  border: 2px solid #000 !important;
+}
+
+/* Messages d'erreur accessibles */
+.error-message {
+  color: #dc3545;
+  font-size: 0.875rem;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.error-message::before {
+  content: "⚠️ ";
+  margin-right: 4px;
+}
+
+/* États de validation visuels */
+input:invalid {
+  border-color: #dc3545 !important;
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
+
+input:valid:not(:placeholder-shown) {
+  border-color: #28a745 !important;
+  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25) !important;
+}
+
+/* Améliorations du contraste */
+.main-btn,
+.nav-btn,
+.theme-list {
+  min-height: 44px; /* Taille minimum recommandée */
+  position: relative;
+}
+
+.main-btn:focus,
+.nav-btn:focus,
+.theme-list:focus {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Support des préférences système */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text-color: #e1e5e9;
+    --bg-color: #1a1d23;
+    --card-bg: #2d3748;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Responsive text sizing */
+@media (max-width: 768px) {
+  body {
+    font-size: 16px; /* Empêche le zoom automatique sur iOS */
+  }
+  
+  input, select, textarea {
+    font-size: 16px; /* Empêche le zoom automatique */
+  }
+}
+
+/* Annonceur pour lecteurs d'écran */
+#aria-announcer {
+  position: absolute !important;
+  left: -10000px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(1px, 1px, 1px, 1px) !important;
+}
+
 /* === PROTECTIONS DOM GÉNÉRALES === */
 
 /* Protection contre les débordements */
