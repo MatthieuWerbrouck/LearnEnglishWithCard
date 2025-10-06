@@ -523,13 +523,15 @@ window.addEventListener('DOMContentLoaded', function() {
 
   function showSummaryScreen() {
     // Nettoie tous les anciens résumés et TOUS les anciens boutons du DOM
-    const parent = document.querySelector('.container');
-    Array.from(parent.querySelectorAll('#evalSummaryDiv')).forEach(div => div.remove());
+    const parent = DOMUtils.safeQuery('.container');
+    if (parent) {
+      Array.from(parent.querySelectorAll('#evalSummaryDiv')).forEach(div => div.remove());
+    }
     Array.from(document.querySelectorAll('#backEvalBtn')).forEach(btn => btn.remove());
     
     // Nettoie le conteneur de boutons de validation des thèmes
-    const themeValidationContainer = document.getElementById('themeValidationBtnContainer');
-    if (themeValidationContainer) {
+    const themeValidationContainer = DOMUtils.safeQuery('#themeValidationBtnContainer');
+    if (themeValidationContainer && themeValidationContainer.parentNode) {
       themeValidationContainer.remove();
     }
 
@@ -671,11 +673,17 @@ function prepareEvaluationData() {
 }
 
 function initEvaluationInterface() {
-  const parent = document.querySelector('.container');
+  const parent = DOMUtils.safeQuery('.container');
+  if (!parent) {
+    console.error('❌ [Evaluation] Conteneur parent non trouvé');
+    return;
+  }
   
   // Nettoie l'interface précédente
-  const existingEvalDiv = document.getElementById('evaluationInterface');
-  if (existingEvalDiv) existingEvalDiv.remove();
+  const existingEvalDiv = DOMUtils.safeQuery('#evaluationInterface');
+  if (existingEvalDiv && existingEvalDiv.parentNode) {
+    existingEvalDiv.remove();
+  }
   
   // Crée l'interface d'évaluation
   const evalDiv = document.createElement('div');
@@ -877,15 +885,19 @@ function showFreeResponseQuestion(question) {
   // Focus sur le champ de saisie
   document.getElementById('freeResponseInput').focus();
   
-  // Validation avec Entrée
-  document.getElementById('freeResponseInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-      document.getElementById('validateBtn').click();
-    }
-  });
+  // Validation avec Entrée (sécurisée)
+  const freeInput = DOMUtils.safeQuery('#freeResponseInput');
+  const validateBtn = DOMUtils.safeQuery('#validateBtn');
   
-  // Configure le bouton de validation
-  document.getElementById('validateBtn').onclick = function() {
+  if (freeInput && validateBtn) {
+    DOMUtils.safeAddEventListener(freeInput, 'keypress', function(e) {
+      if (e.key === 'Enter') {
+        validateBtn.click();
+      }
+    });
+    
+    // Configure le bouton de validation
+    validateBtn.onclick = function() {
     const userAnswer = document.getElementById('freeResponseInput').value.trim();
     if (!userAnswer) {
       alert('Veuillez saisir une réponse');
@@ -931,16 +943,19 @@ function validateAnswer(userAnswer, correctAnswer, question) {
   // Affiche le feedback
   showFeedback(isCorrect, correctAnswer, question);
   
-  // Masque le bouton "Valider" et affiche le bouton "Suivant"
-  document.getElementById('validateBtn').style.display = 'none';
+  // Masque le bouton "Valider" et affiche le bouton "Suivant" (sécurisé)
+  const validateBtn = DOMUtils.safeQuery('#validateBtn');
+  if (validateBtn) validateBtn.style.display = 'none';
   
   if (currentQuestionIndex < evaluationQuestions.length - 1) {
-    document.getElementById('nextQuestionBtn').style.display = '';
+    const nextBtn = DOMUtils.safeQuery('#nextQuestionBtn');
+    if (nextBtn) nextBtn.style.display = '';
   } else {
-    document.getElementById('finishEvalBtn').style.display = '';
+    const finishBtn = DOMUtils.safeQuery('#finishEvalBtn');
+    if (finishBtn) finishBtn.style.display = '';
   }
   
-  // Désactive les boutons de choix pour éviter les modifications
+  // Désactive les boutons de choix pour éviter les modifications (sécurisé)
   document.querySelectorAll('#answerSection .main-btn, #freeResponseInput').forEach(element => {
     element.disabled = true;
     if (element.tagName === 'BUTTON') {
@@ -988,15 +1003,17 @@ function showEvaluationResults() {
   console.log('🎯 [Evaluation] Affichage des résultats commencé');
   
   try {
-    const parent = document.querySelector('.container');
+    const parent = DOMUtils.safeQuery('.container');
     if (!parent) {
       console.error('❌ [Evaluation] Conteneur parent non trouvé');
       return;
     }
     
     // Nettoie l'interface d'évaluation
-    const evalInterface = document.getElementById('evaluationInterface');
-    if (evalInterface) evalInterface.remove();
+    const evalInterface = DOMUtils.safeQuery('#evaluationInterface');
+    if (evalInterface && evalInterface.parentNode) {
+      evalInterface.remove();
+    }
     
     // Vérifie que nous avons des résultats
     if (!evaluationResults || evaluationResults.length === 0) {

@@ -25,7 +25,11 @@ function saveThemes(themes) {
 
 function updateThemeSelect() {
   const themes = getThemes();
-  const select = document.getElementById('themeSelect');
+  const select = DOMUtils.safeQuery('#themeSelect');
+  if (!select) {
+    console.error('❌ [Ajout] themeSelect non trouvé');
+    return;
+  }
   select.innerHTML = '';
   Object.keys(themes).forEach(theme => {
     const opt = document.createElement('option');
@@ -38,16 +42,33 @@ function updateThemeSelect() {
 document.addEventListener('DOMContentLoaded', () => {
   updateThemeSelect();
 
-  const form = document.getElementById('addCardForm');
-  const addMsg = document.getElementById('addMsg');
+  const form = DOMUtils.safeQuery('#addCardForm');
+  const addMsg = DOMUtils.safeQuery('#addMsg');
+
+  if (!form || !addMsg) {
+    console.error('❌ [Ajout] Éléments de formulaire non trouvés');
+    return;
+  }
 
   form.onsubmit = function(e) {
     e.preventDefault();
     const themes = getThemes();
-    let theme = document.getElementById('themeSelect').value.trim();
-    const newTheme = document.getElementById('newTheme').value.trim();
-    const en = document.getElementById('enWord').value.trim();
-    const fr = document.getElementById('frWord').value.trim();
+    
+    // Récupération sécurisée des champs
+    const themeSelect = DOMUtils.safeQuery('#themeSelect');
+    const newThemeInput = DOMUtils.safeQuery('#newTheme');
+    const enInput = DOMUtils.safeQuery('#enWord');
+    const frInput = DOMUtils.safeQuery('#frWord');
+    
+    if (!themeSelect || !newThemeInput || !enInput || !frInput) {
+      showMessage(addMsg, '❌ Erreur: Champs manquants', 'error');
+      return;
+    }
+    
+    let theme = themeSelect.value.trim();
+    const newTheme = newThemeInput.value.trim();
+    const en = enInput.value.trim();
+    const fr = frInput.value.trim();
     
     if (newTheme) theme = newTheme;
     
@@ -65,8 +86,12 @@ document.addEventListener('DOMContentLoaded', () => {
     showMessage(`✅ Carte "${en} → ${fr}" ajoutée au thème "${theme}" !`, 'success');
   };
 
-  function showMessage(text, type) {
-    const addMsg = document.getElementById('addMsg');
+  function showMessage(text, type, element = null) {
+    const addMsg = element || DOMUtils.safeQuery('#addMsg');
+    if (!addMsg) {
+      console.error('❌ [Ajout] addMsg non trouvé');
+      return;
+    }
     addMsg.textContent = text;
     addMsg.style.display = 'block';
     

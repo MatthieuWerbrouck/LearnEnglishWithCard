@@ -6,6 +6,7 @@
   <title>📊 Résumé des progrès - Polyglot Flashcards</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script src="dom-utils.js"></script>
   <style>
     .table-container {
       overflow-x: auto;
@@ -388,53 +389,53 @@
       const session = history.find(s => s.id === sessionId);
       if (!session) return;
 
-      // Gestion sécurisée des données de session
-      const percentage = session.percentage || 0;
-      const correctAnswers = session.correctAnswers || 0;
-      const totalQuestions = session.totalQuestions || 0;
-      const themes = session.themes || [];
-      const language = session.language || 'Non spécifié';
-      const mode = session.mode || 'Non spécifié';
-      const weightedPercentage = session.weightedPercentage || percentage;
-      const themeBreakdown = session.themeBreakdown || {};
-      const totalTime = session.totalTime || 0;
+      // Gestion sécurisée des données de session avec validation
+      const sessionData = {
+        percentage: session.percentage || 0,
+        correctAnswers: session.correctAnswers || 0,
+        totalQuestions: session.totalQuestions || 0,
+        themes: Array.isArray(session.themes) ? session.themes : [],
+        language: session.language || 'Non spécifié',
+        mode: session.mode || 'Non spécifié',
+        weightedPercentage: session.weightedPercentage || session.percentage || 0,
+        themeBreakdown: session.themeBreakdown || {},
+        totalTime: session.totalTime || 0
+      };
 
-      let html = `
+      // Construction du contenu avec template sécurisé
+      let content = `
         <div class="session-detail">
           <h4>Détail de la session du ${formatDate(session.timestamp)}</h4>
           <div class="row" style="margin-bottom: 20px;">
             <div class="col-md-6">
-              <p><strong>Mode:</strong> ${formatMode(mode)}</p>
-              <p><strong>Langue:</strong> ${language}</p>
-              <p><strong>Score:</strong> ${correctAnswers}/${totalQuestions} (${percentage}%)</p>
-              ${weightedPercentage !== percentage ? 
-                `<p><strong>Score pondéré:</strong> ${weightedPercentage}%</p>` : 
+              <p><strong>Mode:</strong> ${formatMode(sessionData.mode)}</p>
+              <p><strong>Langue:</strong> ${sessionData.language}</p>
+              <p><strong>Score:</strong> ${sessionData.correctAnswers}/${sessionData.totalQuestions} (${sessionData.percentage}%)</p>
+              ${sessionData.weightedPercentage !== sessionData.percentage ? 
+                `<p><strong>Score pondéré:</strong> ${sessionData.weightedPercentage}%</p>` : 
                 ''
               }
             </div>
             <div class="col-md-6">
-              <p><strong>Thèmes:</strong> ${themes.length > 0 ? themes.join(', ') : 'Aucun thème'}</p>
-              <p><strong>Temps total:</strong> ${formatDuration(totalTime)}</p>
-              <p><strong>Temps moyen/question:</strong> ${totalQuestions > 0 ? formatDuration(totalTime / totalQuestions) : 'N/A'}</p>
+              <p><strong>Thèmes:</strong> ${sessionData.themes.length > 0 ? sessionData.themes.join(', ') : 'Aucun thème'}</p>
+              <p><strong>Temps total:</strong> ${formatDuration(sessionData.totalTime)}</p>
+              <p><strong>Temps moyen/question:</strong> ${sessionData.totalQuestions > 0 ? formatDuration(sessionData.totalTime / sessionData.totalQuestions) : 'N/A'}</p>
             </div>
           </div>
       `;
 
-      if (themeBreakdown && Object.keys(themeBreakdown).length > 0) {
-        html += `
-          <h5>Performance par thème:</h5>
-          <div class="row">
-        `;
+      // Ajout des détails par thème si disponible
+      if (Object.keys(sessionData.themeBreakdown).length > 0) {
+        content += `<h5>Performance par thème:</h5><div class="row">`;
         
-        Object.entries(themeBreakdown).forEach(([theme, data]) => {
-          // Gestion sécurisée des données de thème
+        Object.entries(sessionData.themeBreakdown).forEach(([theme, data]) => {
           const correct = data?.correct || 0;
           const total = data?.total || 0;
           const themePercentage = total > 0 ? Math.round((correct / total) * 100) : 0;
           const color = themePercentage >= 70 ? '#28a745' : 
                        themePercentage >= 50 ? '#ffc107' : '#dc3545';
           
-          html += `
+          content += `
             <div class="col-md-6" style="margin-bottom: 10px;">
               <div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; border-left: 4px solid ${color};">
                 <strong>${theme}</strong><br>
@@ -444,61 +445,15 @@
           `;
         });
         
-        html += `</div>`;
+        content += `</div>`;
       }
 
-      html += `</div>`;
+      content += `</div>`;
 
-      const modal = document.createElement('div');
-      modal.style.cssText = `
-        position: fixed; 
-        top: 0; 
-        left: 0; 
-        right: 0; 
-        bottom: 0; 
-        background: rgba(0,0,0,0.8); 
-        z-index: 1000; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center;
-      `;
+      // Utilisation de l'utilitaire modal sécurisé
+      const { modal, closeModal } = DOMUtils.createModal(content, { closeButton: true });
       
-      modal.innerHTML = `
-        <div style="background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05)); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 30px; max-width: 800px; max-height: 80vh; overflow-y: auto; color: white;" onclick="event.stopPropagation()">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0;">Détail de la session</h3>
-            <button id="closeModalBtn" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">&times;</button>
-          </div>
-          ${html}
-        </div>
-      `;
-      
-      // Fonction de fermeture propre
-      function closeModal() {
-        if (modal && modal.parentNode) {
-          modal.remove();
-        }
-      }
-      
-      // Event listeners pour fermeture
-      modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-          closeModal();
-        }
-      });
-      
-      modal.querySelector('#closeModalBtn').addEventListener('click', closeModal);
-      
-      // Fermeture avec Escape
-      function handleKeyDown(e) {
-        if (e.key === 'Escape') {
-          closeModal();
-          document.removeEventListener('keydown', handleKeyDown);
-        }
-      }
-      document.addEventListener('keydown', handleKeyDown);
-      
-      document.body.appendChild(modal);
+      // Le nettoyage est automatiquement géré par createModal
     }
 
     // Event listeners pour les filtres

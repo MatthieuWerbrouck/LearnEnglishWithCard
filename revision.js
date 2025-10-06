@@ -73,19 +73,24 @@ let currentIndex = 0;
 let flipped = false;
 let flipTimeout = null;
 
-// Éléments DOM
-const langSelectDiv = document.getElementById('langSelect');
-const themeTitle = document.getElementById('themeTitle');
-const themeList = document.getElementById('themeList');
-const flashcardSection = document.getElementById('flashcardSection');
-const flashcard = document.getElementById('flashcard');
-const cardFront = document.getElementById('cardFront');
-const cardBack = document.getElementById('cardBack');
-const prevBtn = document.getElementById('prevBtn');
-const nextBtn = document.getElementById('nextBtn');
-const feedbackButtons = document.getElementById('feedbackButtons');
-const knownBtn = document.getElementById('knownBtn');
-const unknownBtn = document.getElementById('unknownBtn');
+// Éléments DOM (sécurisés)
+const DOMElements = {
+  langSelectDiv: () => DOMUtils.safeQuery('#langSelect'),
+  themeTitle: () => DOMUtils.safeQuery('#themeTitle'),
+  themeList: () => DOMUtils.safeQuery('#themeList'),
+  flashcardSection: () => DOMUtils.safeQuery('#flashcardSection'),
+  flashcard: () => DOMUtils.safeQuery('#flashcard'),
+  cardFront: () => DOMUtils.safeQuery('#cardFront'),
+  cardBack: () => DOMUtils.safeQuery('#cardBack'),
+  prevBtn: () => DOMUtils.safeQuery('#prevBtn'),
+  nextBtn: () => DOMUtils.safeQuery('#nextBtn'),
+  feedbackButtons: () => DOMUtils.safeQuery('#feedbackButtons'),
+  knownBtn: () => DOMUtils.safeQuery('#knownBtn'),
+  unknownBtn: () => DOMUtils.safeQuery('#unknownBtn'),
+  langSelectContainer: () => DOMUtils.safeQuery('#langSelectContainer'),
+  themeSelectContainer: () => DOMUtils.safeQuery('#themeSelectContainer'),
+  globalBackButton: () => DOMUtils.safeQuery('#globalBackButton')
+};
 
 // ================================
 // SYSTÈME DE CACHE INTELLIGENT
@@ -254,13 +259,24 @@ function showErrorMessage(error) {
 function showLangSelection() {
   console.log('🌍 [Revision] Affichage de la sélection des langues');
   
-  // Gestion de l'affichage des sections
-  document.getElementById('langSelectContainer').style.display = '';
-  document.getElementById('themeSelectContainer').style.display = 'none';
-  document.getElementById('flashcardSection').style.display = 'none';
-  document.getElementById('globalBackButton').style.display = '';
+  // Gestion de l'affichage des sections (sécurisée)
+  const containers = [
+    { element: DOMElements.langSelectContainer(), display: '' },
+    { element: DOMElements.themeSelectContainer(), display: 'none' },
+    { element: DOMElements.flashcardSection(), display: 'none' },
+    { element: DOMElements.globalBackButton(), display: '' }
+  ];
+  
+  containers.forEach(({ element, display }) => {
+    if (element) element.style.display = display;
+  });
   
   // Création des boutons de langue
+  const langSelectDiv = DOMElements.langSelectDiv();
+  if (!langSelectDiv) {
+    console.error('❌ [Revision] langSelectDiv non trouvé');
+    return;
+  }
   langSelectDiv.innerHTML = '';
   allLangs.forEach(lang => {
     const btn = document.createElement('button');
@@ -282,10 +298,16 @@ function selectLang(lang) {
   selectedLang = lang;
   themes = dataByLang[lang];
   
-  // Transition d'écran
-  document.getElementById('langSelectContainer').style.display = 'none';
-  document.getElementById('themeSelectContainer').style.display = '';
-  document.getElementById('globalBackButton').style.display = 'none';
+  // Transition d'écran (sécurisée)
+  const transitions = [
+    { element: DOMElements.langSelectContainer(), display: 'none' },
+    { element: DOMElements.themeSelectContainer(), display: '' },
+    { element: DOMElements.globalBackButton(), display: 'none' }
+  ];
+  
+  transitions.forEach(({ element, display }) => {
+    if (element) element.style.display = display;
+  });
   
   // Mise à jour du titre avec la langue
   const themeTitle = document.getElementById('themeTitle');
