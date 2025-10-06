@@ -267,6 +267,120 @@ label {
   box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
 }
 
+.nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* === BOUTONS DE FEEDBACK RÉVISION === */
+.success-btn {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+}
+
+.success-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+}
+
+.success-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.danger-btn {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+}
+
+.danger-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+}
+
+.danger-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* === ANIMATIONS === */
+@keyframes fadeInScale {
+  from { 
+    opacity: 0; 
+    transform: scale(0.9);
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1);
+  }
+}
+
+@keyframes feedbackBounce {
+  0% { 
+    opacity: 0;
+    transform: scale(0.3) translateY(20px);
+  }
+  50% { 
+    opacity: 1;
+    transform: scale(1.1) translateY(-5px);
+  }
+  100% { 
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes iconSpin {
+  0% { 
+    transform: rotate(0deg) scale(0.5);
+    opacity: 0;
+  }
+  50% { 
+    transform: rotate(180deg) scale(1.2);
+    opacity: 1;
+  }
+  100% { 
+    transform: rotate(360deg) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% { 
+    left: -100%;
+  }
+  100% { 
+    left: 100%;
+  }
+}
+
+@keyframes buttonPress {
+  0% { 
+    transform: scale(1);
+  }
+  50% { 
+    transform: scale(0.95);
+  }
+  100% { 
+    transform: scale(1);
+  }
+}
+
 /* === BOUTONS DE THÈMES === */
 
 .theme-list button {
