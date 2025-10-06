@@ -14,7 +14,7 @@
   <p style="margin-bottom:24px;color:#444;font-size:1.1rem;">Apprends et révise l'anglais, le japonais et plus par thèmes</p>
     <div class="menu" style="display:flex;flex-direction:column;gap:18px;align-items:center;">
       <button class="main-btn" onclick="window.location.href='revision.html'">Révision par thème</button>
-      <button class="main-btn" onclick="window.location.href='evaluation.html'">Évaluation aléatoire</button>
+      <button class="main-btn" style="background:#ccc;color:#888;cursor:not-allowed;" disabled>Évaluation</button>
       <button class="main-btn" id="refreshBtn" style="margin-top:12px">Actualiser les cartes</button>
       <button onclick="window.location.href='resume.html'" class="main-btn" style="margin-top:18px;">Résumé des notes</button>
     </div>
@@ -24,6 +24,21 @@
         alert('Les cartes seront actualisées lors du prochain affichage !');
       };
     </script>
+  </div>
+  <!-- Bandeau warning -->
+  <div style="
+    position:fixed;
+    left:0;right:0;bottom:0;
+    background:#ffc107;
+    color:#333;
+    font-weight:bold;
+    font-size:1em;
+    padding:8px 0;
+    z-index:9999;
+    text-align:center;
+    overflow:hidden;
+  ">
+    ⚠️ Travaux en cours sur la partie évaluation
   </div>
 </body>
 </html>

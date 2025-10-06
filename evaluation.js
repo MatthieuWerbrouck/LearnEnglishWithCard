@@ -1,3 +1,8 @@
+
+/*
+// =======================
+// Ancienne logique d'évaluation (mise de côté)
+// =======================
 // Nouvelle logique : sélection de thèmes avant le quiz
 let allCards = [];
 let dataByLang = {};
@@ -380,6 +385,40 @@ function selectAnswer(selected, correct, btn) {
   nextBtn.style.display = '';
 }
 
+// Après la validation d'une réponse, afficher le bouton "Carte suivante"
+function handleAnswerValidation(isCorrect) {
+  // ...existing code pour afficher le feedback...
+  document.getElementById('nextBtn').style.display = 'block';
+  // ...existing code...
+}
+
+// Fonction pour afficher la question suivante
+function showNextQuestion() {
+  currentQuestionIndex++;
+  if (currentQuestionIndex < questions.length) {
+    displayQuestion(questions[currentQuestionIndex]);
+    document.getElementById('feedback').innerHTML = '';
+    document.getElementById('nextBtn').style.display = 'none';
+    // ...autres réinitialisations si besoin...
+  } else {
+    showResults();
+  }
+}
+
+// Gestionnaire du bouton "Carte suivante"
+document.getElementById('nextBtn').addEventListener('click', showNextQuestion);
+
+// Ajouter un gestionnaire d'événement pour le bouton "Carte suivante"
+document.getElementById('nextBtn').addEventListener('click', function() {
+  // ...logique pour passer à la question suivante...
+  document.getElementById('nextBtn').style.display = 'none';
+  // ...afficher la prochaine question...
+});
+
+// Déclaration unique en haut du fichier :
+let questions = [];
+
+
 // Ajoutez cette fonction pour le mode texte
 function selectTextAnswer(userInput, correct, input, submitBtn) {
   // Normalisation pour comparaison (minuscule, trim)
@@ -453,4 +492,88 @@ function afficherResultat() {
   }
   saveScoreToHistory(score, totalQuestions, currentMode, selectedLang);
 }
+
+// Variables globales
+
+let currentQuestionIndex = 0;
+let evaluationMode = 'qcm';
+
+// Initialisation de l'évaluation
+function startEvaluation() {
+  // ...récupération des thèmes et du mode...
+  questions = getSelectedQuestions(); // À adapter selon votre logique
+  currentQuestionIndex = 0;
+  score = 0;
+  document.getElementById('flashcardSection').style.display = 'block';
+  document.getElementById('nextBtn').style.display = 'none';
+  showQuestion();
+}
+
+// Affiche la question courante
+function showQuestion() {
+  const q = questions[currentQuestionIndex];
+  // ...affichage du contenu de la carte selon le mode...
+  document.getElementById('feedback').innerHTML = '';
+  document.getElementById('answers').innerHTML = '';
+  document.getElementById('nextBtn').style.display = 'none';
+  // ...génération des réponses (QCM ou libre)...
+}
+
+// Validation de la réponse
+function validateAnswer(userAnswer) {
+  const q = questions[currentQuestionIndex];
+  let isCorrect = false;
+  // ...logique de validation selon le mode...
+  if (isCorrect) score++;
+  document.getElementById('feedback').innerHTML = isCorrect ? "Bonne réponse !" : "Mauvaise réponse.";
+  document.getElementById('nextBtn').style.display = 'block';
+  // ...désactive les boutons de réponse si besoin...
+}
+
+// Passage à la question suivante
+function showNextQuestion() {
+  currentQuestionIndex++;
+  if (currentQuestionIndex < questions.length) {
+    showQuestion();
+  } else {
+    showResults();
+  }
+}
+
+// Affichage des résultats
+function showResults() {
+  document.getElementById('flashcardSection').style.display = 'none';
+  // ...affichage du score et des corrections...
+}
+
+// Gestionnaires d'événements
+document.getElementById('startBtn').addEventListener('click', startEvaluation);
+document.getElementById('nextBtn').addEventListener('click', showNextQuestion);
+// ...ajoutez les gestionnaires pour les réponses selon le mode...
+
+// Ajoutez cette fonction utilitaire avant startEvaluation :
+function getSelectedQuestions() {
+  let selected = [];
+  if (!selectedLang || !selectedThemes || !selectedThemes.length) return selected;
+  selectedThemes.forEach(theme => {
+    if (dataByLang[selectedLang][theme]) {
+      selected = selected.concat(dataByLang[selectedLang][theme]);
+    }
+  });
+  let langKey = selectedLang === 'anglais' ? 'en' : (selectedLang === 'japonais' ? 'ja' : selectedLang);
+  selected = selected.map(card => ({
+    question: card[langKey],
+    answer: card.fr,
+    theme: card.theme
+  }));
+  shuffle(selected);
+  // Limite au nombre de questions demandé
+  const maxQuestions = parseInt(document.getElementById('questionCount').value) || 1;
+  return selected.slice(0, maxQuestions);
+}
+
+// ...existing code...
+// Tout le code de la partie évaluation est mis en commentaire pour ne plus être utilisé
+// ...existing code...
+*/
 
