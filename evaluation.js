@@ -4,11 +4,233 @@
 
 // Nouvelle logique d'évaluation - étape 1 : sélection dynamique de la langue
 // Système de cache optimisé pour limiter les appels à SheetDB
+// Système de scoring intelligent avec persistance complète
 
 let sheetDBData = null;
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes en millisecondes
 const CACHE_KEY = 'sheetDB_cache';
 const CACHE_TIMESTAMP_KEY = 'sheetDB_cache_timestamp';
+
+// ================================
+// SYSTÈME DE SCORING ET PERSISTANCE
+// ================================
+
+const EVALUATION_HISTORY_KEY = 'evaluation_history';
+const MAX_HISTORY_ENTRIES = 100; // Limite pour éviter l'inflation du localStorage
+
+/**
+ * Sauvegarde les résultats d'une session d'évaluation
+ * @param {Object} sessionData - Données de la session d'évaluation
+ */
+function saveEvaluationSession(sessionData) {
+  try {
+    const history = getEvaluationHistory();
+    
+    // Crée l'entrée de session
+    const sessionEntry = {
+      id: generateSessionId(),
+      timestamp: Date.now(),
+      date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+      language: sessionData.language,
+      mode: sessionData.mode,
+      themes: sessionData.themes,
+      totalQuestions: sessionData.totalQuestions,
+      correctAnswers: sessionData.correctAnswers,
+      score: sessionData.score,
+      percentage: sessionData.percentage,
+      weightedPercentage: sessionData.weightedPercentage || sessionData.percentage,
+      difficultyFactor: sessionData.difficultyFactor || 1,
+      duration: sessionData.duration || null,
+      averageResponseTime: sessionData.averageResponseTime || null,
+      results: sessionData.results, // Détail de chaque question
+      themeBreakdown: sessionData.themeBreakdown || {}
+    };
+    
+    // Ajoute au début de l'historique
+    history.unshift(sessionEntry);
+    
+    // Limite la taille de l'historique
+    if (history.length > MAX_HISTORY_ENTRIES) {
+      history.splice(MAX_HISTORY_ENTRIES);
+    }
+    
+    // Sauvegarde
+    localStorage.setItem(EVALUATION_HISTORY_KEY, JSON.stringify(history));
+    console.log(`💾 [Evaluation] Session sauvegardée: ${sessionData.score}/${sessionData.totalQuestions} (${sessionData.percentage}%)`);
+    
+    return sessionEntry.id;
+    
+  } catch (error) {
+    console.error('❌ [Evaluation] Erreur sauvegarde session:', error);
+    return null;
+  }
+}
+
+/**
+ * Récupère l'historique complet des évaluations
+ * @returns {Array} Historique des sessions d'évaluation
+ */
+function getEvaluationHistory() {
+  try {
+    const raw = localStorage.getItem(EVALUATION_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (error) {
+    console.warn('⚠️ [Evaluation] Erreur lecture historique:', error);
+    return [];
+  }
+}
+
+/**
+ * Génère un ID unique pour la session
+ * @returns {string} ID de session
+ */
+function generateSessionId() {
+  return 'eval_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+/**
+ * Calcule la répartition des scores par thème
+ * @param {Array} results - Résultats détaillés de l'évaluation
+ * @returns {Object} Breakdown par thème
+ */
+function calculateThemeBreakdown(results) {
+  const breakdown = {};
+  
+  results.forEach(result => {
+    const theme = result.question.theme;
+    if (!theme) return;
+    
+    if (!breakdown[theme]) {
+      breakdown[theme] = { correct: 0, total: 0, percentage: 0 };
+    }
+    
+    breakdown[theme].total++;
+    if (result.isCorrect) {
+      breakdown[theme].correct++;
+    }
+  });
+  
+  // Calcule les pourcentages
+  Object.keys(breakdown).forEach(theme => {
+    const data = breakdown[theme];
+    data.percentage = Math.round((data.correct / data.total) * 100);
+  });
+  
+  return breakdown;
+}
+
+/**
+ * Calcule un score pondéré selon le type de question et la difficulté
+ * @param {Array} results - Résultats de l'évaluation
+ * @param {string} mode - Mode d'évaluation
+ * @returns {Object} Score pondéré et métriques
+ */
+function calculateAdvancedScore(results, mode) {
+  // Vérifications de sécurité
+  if (!results || !Array.isArray(results) || results.length === 0) {
+    console.warn('⚠️ [Evaluation] Résultats invalides pour le calcul du score avancé');
+    return {
+      weightedScore: 0,
+      maxWeightedScore: 0,
+      weightedPercentage: 0,
+      difficultyFactor: 1.0,
+      standardPercentage: 0
+    };
+  }
+  
+  let totalWeightedPoints = 0;
+  let totalPossiblePoints = 0;
+  
+  results.forEach(result => {
+    // Pondération selon le type de question
+    let weight = 1.0; // Base
+    
+    switch(mode) {
+      case 'libre':
+        weight = 1.5; // Réponse libre = plus difficile
+        break;
+      case 'qcm_lang_fr':
+        weight = 1.2; // Reconnaissance = moyennement difficile
+        break;
+      case 'qcm_fr_lang':
+        weight = 1.0; // Production = difficulté de base
+        break;
+      default:
+        weight = 1.0; // Défaut sécurisé
+    }
+    
+    // Points obtenus pour cette question
+    const questionPoints = result.isCorrect ? weight : 0;
+    totalWeightedPoints += questionPoints;
+    totalPossiblePoints += weight;
+  });
+  
+  // Calcule le score pondéré
+  const weightedPercentage = totalPossiblePoints > 0 ? 
+    Math.round((totalWeightedPoints / totalPossiblePoints) * 100) : 0;
+  
+  // Métrique de difficulté globale
+  const difficultyFactor = results.length > 0 ? 
+    Math.round((totalPossiblePoints / results.length) * 100) / 100 : 1.0;
+  
+  const correctCount = results.filter(r => r && r.isCorrect).length;
+  const standardPercentage = results.length > 0 ? 
+    Math.round((correctCount / results.length) * 100) : 0;
+  
+  return {
+    weightedScore: Math.round(totalWeightedPoints * 10) / 10,
+    maxWeightedScore: Math.round(totalPossiblePoints * 10) / 10,
+    weightedPercentage: weightedPercentage,
+    difficultyFactor: difficultyFactor,
+    standardPercentage: standardPercentage
+  };
+}
+
+/**
+ * Synchronise les scores d'évaluation avec le système de révision
+ * @param {Array} results - Résultats détaillés
+ * @param {string} language - Langue évaluée
+ */
+function syncWithRevisionScores(results, language) {
+  try {
+    // Utilise les fonctions de revision.js si disponibles
+    if (typeof getThemeScores === 'function' && typeof updateScoreForTheme === 'function') {
+      console.log('🔗 [Evaluation] Synchronisation avec le système de révision');
+      
+      // Groupe les résultats par thème
+      const themeResults = {};
+      results.forEach(result => {
+        const theme = result.question.theme;
+        if (!theme) return;
+        
+        if (!themeResults[theme]) {
+          themeResults[theme] = [];
+        }
+        themeResults[theme].push(result.isCorrect);
+      });
+      
+      // Met à jour les scores de révision pour chaque thème
+      Object.keys(themeResults).forEach(theme => {
+        const themeAnswers = themeResults[theme];
+        
+        // Calcule le taux de réussite pour ce thème dans cette évaluation
+        const successRate = themeAnswers.filter(correct => correct).length / themeAnswers.length;
+        
+        // Met à jour plusieurs fois selon le nombre de questions pour avoir un impact
+        themeAnswers.forEach(isCorrect => {
+          updateScoreForTheme(language, theme, isCorrect);
+        });
+        
+        console.log(`📊 [Sync] Thème "${theme}": ${Math.round(successRate * 100)}% de réussite`);
+      });
+      
+    } else {
+      console.log('⚠️ [Evaluation] Fonctions de révision non disponibles pour la synchronisation');
+    }
+  } catch (error) {
+    console.error('❌ [Evaluation] Erreur synchronisation:', error);
+  }
+}
 
 // Fonction utilitaire pour afficher le statut du cache
 function getCacheStatus() {
@@ -391,8 +613,14 @@ window.addEventListener('DOMContentLoaded', function() {
 let evaluationQuestions = [];
 let currentQuestionIndex = 0;
 let evaluationResults = [];
+let evaluationStartTime = null;
+let questionStartTime = null;
 
 function startEvaluation() {
+  // Démarrage du chrono de session
+  evaluationStartTime = Date.now();
+  console.log('⏱️ [Evaluation] Session démarrée');
+  
   // Étape 1 : Préparer les données de questions
   prepareEvaluationData();
   
@@ -495,6 +723,9 @@ function showQuestion(questionIndex) {
     showEvaluationResults();
     return;
   }
+  
+  // Démarrage du chrono pour cette question
+  questionStartTime = Date.now();
   
   const question = evaluationQuestions[questionIndex];
   currentQuestionIndex = questionIndex;
@@ -684,13 +915,17 @@ function validateAnswer(userAnswer, correctAnswer, question) {
     isCorrect = userAnswer === correctAnswer;
   }
   
+  // Calcule le temps de réponse
+  const responseTime = questionStartTime ? Date.now() - questionStartTime : null;
+  
   // Stocke le résultat
   evaluationResults.push({
     question: question,
     userAnswer: userAnswer,
     correctAnswer: correctAnswer,
     isCorrect: isCorrect,
-    mode: window.selectedEvalMode
+    mode: window.selectedEvalMode,
+    responseTime: responseTime
   });
   
   // Affiche le feedback
@@ -750,16 +985,64 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function showEvaluationResults() {
-  const parent = document.querySelector('.container');
+  console.log('🎯 [Evaluation] Affichage des résultats commencé');
   
-  // Nettoie l'interface d'évaluation
-  const evalInterface = document.getElementById('evaluationInterface');
-  if (evalInterface) evalInterface.remove();
+  try {
+    const parent = document.querySelector('.container');
+    if (!parent) {
+      console.error('❌ [Evaluation] Conteneur parent non trouvé');
+      return;
+    }
+    
+    // Nettoie l'interface d'évaluation
+    const evalInterface = document.getElementById('evaluationInterface');
+    if (evalInterface) evalInterface.remove();
+    
+    // Vérifie que nous avons des résultats
+    if (!evaluationResults || evaluationResults.length === 0) {
+      console.error('❌ [Evaluation] Aucun résultat d\'évaluation trouvé');
+      return;
+    }
+    
+    console.log(`📊 [Evaluation] Traitement de ${evaluationResults.length} résultats`);
+    
+    // Calcule les statistiques avancées
+    const totalQuestions = evaluationResults.length;
+    const correctAnswers = evaluationResults.filter(r => r.isCorrect).length;
+    const scorePercent = Math.round((correctAnswers / totalQuestions) * 100);
+    
+    console.log(`📈 [Evaluation] Score calculé: ${correctAnswers}/${totalQuestions} (${scorePercent}%)`);
+    
+    // Calcule le score pondéré
+    const advancedScore = calculateAdvancedScore(evaluationResults, window.selectedEvalMode);
+    console.log('⚖️ [Evaluation] Score pondéré calculé:', advancedScore);
+    
+    // Synchronise avec les scores de révision
+    syncWithRevisionScores(evaluationResults, window.selectedLang);
   
-  // Calcule les statistiques
-  const totalQuestions = evaluationResults.length;
-  const correctAnswers = evaluationResults.filter(r => r.isCorrect).length;
-  const scorePercent = Math.round((correctAnswers / totalQuestions) * 100);
+  // Calcule d'abord le breakdown par thème
+  const themeBreakdown = calculateThemeBreakdown(evaluationResults);
+  
+  // Prépare les données de session pour sauvegarde
+  const sessionData = {
+    language: window.selectedLang,
+    mode: window.selectedEvalMode,
+    themes: window.selectedThemes,
+    totalQuestions: totalQuestions,
+    correctAnswers: correctAnswers,
+    score: correctAnswers,
+    percentage: scorePercent,
+    weightedPercentage: advancedScore.weightedPercentage,
+    difficultyFactor: advancedScore.difficultyFactor,
+    results: evaluationResults,
+    duration: evaluationStartTime ? Math.round((Date.now() - evaluationStartTime) / 1000) : null,
+    averageResponseTime: evaluationResults.reduce((sum, r) => sum + (r.responseTime || 0), 0) / evaluationResults.length,
+    themeBreakdown: themeBreakdown
+  };
+  
+  // Sauvegarde la session
+  const sessionId = saveEvaluationSession(sessionData);
+  console.log(`💾 [Evaluation] Session sauvegardée avec ID: ${sessionId}`);
   
   // Crée l'écran de résultats
   const resultsDiv = document.createElement('div');
@@ -769,17 +1052,49 @@ function showEvaluationResults() {
   
   resultsDiv.innerHTML = `
     <div style="text-align: center; margin-bottom: 32px;">
-      <h2 style="color: #333; margin-bottom: 16px;">📊 Résultats de l'évaluation</h2>
-      <div style="font-size: 2.5em; font-weight: bold; margin: 20px 0; color: ${scorePercent >= 70 ? '#28a745' : scorePercent >= 50 ? '#ffc107' : '#dc3545'};">
-        ${correctAnswers}/${totalQuestions}
+      <h2 style="color: #333; margin-bottom: 24px;">📊 Résultats de l'évaluation</h2>
+      
+      <!-- Score principal -->
+      <div style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); padding: 24px; border-radius: 16px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+        <div style="font-size: 3em; font-weight: bold; margin: 16px 0; color: ${scorePercent >= 70 ? '#28a745' : scorePercent >= 50 ? '#ffc107' : '#dc3545'};">
+          ${correctAnswers}/${totalQuestions}
+        </div>
+        <div style="font-size: 1.6em; margin-bottom: 12px; color: #333;">Score : ${scorePercent}%</div>
+        
+        <!-- Score pondéré -->
+        ${advancedScore.weightedPercentage !== scorePercent ? `
+        <div style="font-size: 1.2em; margin-bottom: 12px; color: #666; padding: 8px; background: rgba(102, 126, 234, 0.1); border-radius: 8px;">
+          📈 Score pondéré : ${advancedScore.weightedPercentage}%
+          <div style="font-size: 0.8em; margin-top: 4px;">
+            (Difficulté ${advancedScore.difficultyFactor}x - Mode ${window.selectedEvalMode === 'libre' ? 'Réponse libre' : 'QCM'})
+          </div>
+        </div>
+        ` : ''}
+        
+        <div style="font-size: 1.1em; color: #666; margin-top: 16px;">
+          ${scorePercent >= 80 ? '🎉 Excellent travail ! Maîtrise parfaite !' : 
+            scorePercent >= 70 ? '👍 Très bon travail ! Continuez ainsi !' : 
+            scorePercent >= 50 ? '👌 Bon début, continuez à vous entraîner !' : 
+            '💪 Ne vous découragez pas, chaque évaluation est un progrès !'}
+        </div>
       </div>
-      <div style="font-size: 1.4em; margin-bottom: 8px;">Score : ${scorePercent}%</div>
-      <div style="font-size: 1.1em; color: #666;">
-        ${scorePercent >= 80 ? '🎉 Excellent travail !' : 
-          scorePercent >= 70 ? '👍 Bon travail !' : 
-          scorePercent >= 50 ? '👌 Pas mal, continuez à vous entraîner !' : 
-          '💪 Ne vous découragez pas, la pratique fait la perfection !'}
+      
+      <!-- Analytics par thème -->
+      ${Object.keys(themeBreakdown).length > 1 ? `
+      <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 24px; text-align: left;">
+        <h4 style="color: #333; margin-bottom: 16px; text-align: center;">📚 Performance par thème</h4>
+        <div style="display: grid; gap: 12px; max-width: 500px; margin: 0 auto;">
+          ${Object.entries(themeBreakdown).map(([theme, data]) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: 8px; border-left: 4px solid ${data.percentage >= 70 ? '#28a745' : data.percentage >= 50 ? '#ffc107' : '#dc3545'};">
+              <span style="font-weight: 500;">${theme}</span>
+              <span style="color: ${data.percentage >= 70 ? '#28a745' : data.percentage >= 50 ? '#ffc107' : '#dc3545'}; font-weight: bold;">
+                ${data.correct}/${data.total} (${data.percentage}%)
+              </span>
+            </div>
+          `).join('')}
+        </div>
       </div>
+      ` : ''}
     </div>
     
     ${evaluationResults.some(r => !r.isCorrect) ? `
@@ -845,6 +1160,27 @@ function showEvaluationResults() {
   document.getElementById('backToMenuBtn').onclick = function() {
     window.location.href = 'index.html';
   };
+  
+  console.log('✅ [Evaluation] Résultats affichés avec succès');
+  
+  } catch (error) {
+    console.error('❌ [Evaluation] Erreur lors de l\'affichage des résultats:', error);
+    
+    // Affichage d'urgence simple
+    const parent = document.querySelector('.container');
+    if (parent) {
+      parent.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+          <h2 style="color: #dc3545;">❌ Erreur d'affichage</h2>
+          <p>Une erreur s'est produite lors de l'affichage des résultats.</p>
+          <p><strong>Score:</strong> ${evaluationResults ? evaluationResults.filter(r => r.isCorrect).length : 0}/${evaluationResults ? evaluationResults.length : 0}</p>
+          <button class="main-btn" onclick="window.location.href='index.html'" style="margin-top: 20px;">
+            🏠 Retour à l'accueil
+          </button>
+        </div>
+      `;
+    }
+  }
 }
 
 function cancelEvaluation() {

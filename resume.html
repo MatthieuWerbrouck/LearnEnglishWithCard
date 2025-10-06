@@ -7,16 +7,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <style>
-    .score-table {
-      width: 100%;
-      border-collapse: collapse;
+    .table-container {
+      overflow-x: auto;
       margin: 20px 0;
-      background: rgba(255, 255, 255, 0.8);
-      backdrop-filter: blur(10px);
       border-radius: 16px;
-      overflow: hidden;
       box-shadow: 0 4px 16px rgba(102, 126, 234, 0.1);
     }
+    
+    .score-table {
+      width: 100%;
+      min-width: 600px;
+      border-collapse: collapse;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
+    }
+    
     .score-table th {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
@@ -24,17 +29,52 @@
       font-weight: 600;
       text-align: left;
       font-size: 0.9rem;
+      white-space: nowrap;
     }
+    
     .score-table td {
       padding: 12px;
       border-bottom: 1px solid rgba(102, 126, 234, 0.1);
       font-size: 0.9rem;
     }
+    
     .score-table tr:hover {
       background: rgba(102, 126, 234, 0.05);
     }
+    
     .score-table tr:last-child td {
       border-bottom: none;
+    }
+
+    /* Responsive pour mobile */
+    @media (max-width: 480px) {
+      .score-table {
+        min-width: 500px;
+        font-size: 0.8rem;
+      }
+      
+      .score-table th {
+        padding: 12px 8px;
+        font-size: 0.8rem;
+      }
+      
+      .score-table td {
+        padding: 10px 8px;
+        font-size: 0.8rem;
+      }
+
+      /* Grid responsive pour les filtres */
+      div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+      }
+    }
+
+    /* Responsive pour tablettes */
+    @media (max-width: 768px) {
+      .score-table {
+        min-width: 550px;
+      }
     }
   </style>
 </head>
@@ -47,14 +87,14 @@
       <p style="color: #6b7280; font-size: 1rem;">Suivi de tes performances et statistiques</p>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-bottom: 24px;">
       <div class="form-group" style="margin-bottom: 0;">
         <label for="modeFilter">🎯 Filtrer par mode</label>
         <select id="modeFilter" class="form-input">
           <option value="all">Tous les modes</option>
-          <option value="qcm">QCM (mot anglais, choix français)</option>
-          <option value="qcm_fr_en">QCM (mot français, choix anglais)</option>
-          <option value="libre">Réponse libre</option>
+          <option value="qcm_fr_lang">🔄 QCM (FR → Langue)</option>
+          <option value="qcm_lang_fr">🔄 QCM (Langue → FR)</option>
+          <option value="libre">✏️ Réponse libre</option>
         </select>
       </div>
       <div class="form-group" style="margin-bottom: 0;">
@@ -74,46 +114,429 @@
     </div>
   </div>
   <script>
-    function getHistory() {
-      let history = JSON.parse(localStorage.getItem('scoreHistory')) || [];
-      if (!Array.isArray(history)) history = [];
-      return history;
+    // ================================
+    // SYSTÈME D'HISTORIQUE AVANCÉ
+    // ================================
+
+    /**
+     * Récupère l'historique des évaluations depuis le nouveau système
+     */
+    function getEvaluationHistory() {
+      try {
+        const history = JSON.parse(localStorage.getItem('evaluation_history')) || [];
+        return Array.isArray(history) ? history : [];
+      } catch (error) {
+        console.warn('Erreur lecture historique:', error);
+        return [];
+      }
     }
-    function modeMatch(itemMode, filterMode) {
-      if (filterMode === 'all') return true;
-      if (itemMode === filterMode) return true;
-      if (filterMode === 'qcm' && itemMode.includes('anglais') && itemMode.includes('français')) return true;
-      if (filterMode === 'qcm_fr_en' && itemMode.includes('français') && itemMode.includes('anglais')) return true;
-      if (filterMode === 'libre' && itemMode.toLowerCase().includes('libre')) return true;
-      return false;
+
+    /**
+     * Récupère l'ancien historique pour compatibilité
+     */
+    function getLegacyHistory() {
+      try {
+        const history = JSON.parse(localStorage.getItem('scoreHistory')) || [];
+        return Array.isArray(history) ? history : [];
+      } catch (error) {
+        return [];
+      }
     }
-    function langMatch(itemLang, filterLang) {
-      if (!itemLang) return true;
-      if (filterLang === 'all') return true;
-      if (itemLang.toLowerCase() === filterLang) return true;
-      return false;
+
+    /**
+     * Formate le mode d'évaluation pour affichage
+     */
+    function formatMode(mode) {
+      switch(mode) {
+        case 'qcm_fr_lang': return '🔄 QCM (FR → Langue)';
+        case 'qcm_lang_fr': return '🔄 QCM (Langue → FR)';
+        case 'libre': return '✏️ Réponse libre';
+        default: return mode;
+      }
     }
+
+    /**
+     * Formate la date pour affichage
+     */
+    function formatDate(timestamp) {
+      const date = new Date(timestamp);
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    /**
+     * Génère les statistiques globales
+     */
+    function generateStats(history) {
+      if (!history || history.length === 0) return null;
+
+      const totalSessions = history.length;
+      const totalQuestions = history.reduce((sum, session) => {
+        return sum + (session.totalQuestions || 0);
+      }, 0);
+      const totalCorrect = history.reduce((sum, session) => {
+        return sum + (session.correctAnswers || 0);
+      }, 0);
+      
+      const avgScore = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+      
+      // Calcul des tendances (5 dernières sessions vs 5 précédentes)
+      const recent5 = history.slice(0, 5);
+      const previous5 = history.slice(5, 10);
+      
+      let trend = '';
+      if (recent5.length >= 2 && previous5.length >= 2) {
+        const recentAvg = recent5.reduce((sum, s) => sum + (s.percentage || 0), 0) / recent5.length;
+        const previousAvg = previous5.reduce((sum, s) => sum + (s.percentage || 0), 0) / previous5.length;
+        const diff = recentAvg - previousAvg;
+        
+        if (diff > 5) trend = '📈 En progression !';
+        else if (diff < -5) trend = '📉 À surveiller';
+        else trend = '➡️ Stable';
+      }
+
+      return {
+        totalSessions,
+        totalQuestions,
+        totalCorrect,
+        avgScore: isNaN(avgScore) ? 0 : avgScore,
+        trend
+      };
+    }
+
+    /**
+     * Filtre l'historique selon les critères
+     */
+    function filterHistory(history, modeFilter = 'all', langFilter = 'all') {
+      return history.filter(session => {
+        const modeMatch = modeFilter === 'all' || session.mode === modeFilter;
+        const langMatch = langFilter === 'all' || session.language === langFilter;
+        return modeMatch && langMatch;
+      });
+    }
+
+    /**
+     * Affiche l'historique complet avec statistiques
+     */
     function renderHistory(modeFilter = 'all', langFilter = 'all') {
-      const history = getHistory();
-      let filtered = history.filter(item => modeMatch(item.mode, modeFilter) && langMatch(item.lang, langFilter));
-      if (filtered.length === 0) {
-        document.getElementById('scoreHistory').innerHTML = '<p>Aucun score enregistré pour ce filtre.</p>';
+      const history = getEvaluationHistory();
+      const legacyHistory = getLegacyHistory();
+      const filtered = filterHistory(history, modeFilter, langFilter);
+      
+      const historyDiv = document.getElementById('scoreHistory');
+      
+      if (filtered.length === 0 && legacyHistory.length === 0) {
+        historyDiv.innerHTML = `
+          <div style="text-align: center; padding: 40px; background: rgba(102, 126, 234, 0.05); border-radius: 16px; color: #6b7280;">
+            <div style="font-size: 3rem; margin-bottom: 16px;">📋</div>
+            <h3 style="margin-bottom: 8px;">Aucune évaluation trouvée</h3>
+            <p>Commencez votre première évaluation pour voir vos statistiques ici !</p>
+          </div>
+        `;
         return;
       }
-      let html = '<table class="score-table"><tr><th>Date</th><th>Mode</th><th>Langue</th><th>Score</th><th>Questions</th></tr>';
-      filtered.reverse().forEach(item => {
-        html += `<tr><td>${item.date}</td><td>${item.mode}</td><td>${item.lang || ''}</td><td>${item.score}</td><td>${item.total}</td></tr>`;
-      });
-      html += '</table>';
-      document.getElementById('scoreHistory').innerHTML = html;
+
+      let html = '';
+
+      // Statistiques globales
+      if (filtered.length > 0) {
+        const stats = generateStats(filtered);
+        if (stats) {
+          html += `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+              <div class="stat-card" style="background: linear-gradient(135deg, #28a745, #20c997); color: white; padding: 20px; border-radius: 12px; text-align: center;">
+                <div style="font-size: 2rem; font-weight: bold;">${stats.totalSessions}</div>
+                <div>Évaluations</div>
+              </div>
+              <div class="stat-card" style="background: linear-gradient(135deg, #007bff, #0056b3); color: white; padding: 20px; border-radius: 12px; text-align: center;">
+                <div style="font-size: 2rem; font-weight: bold;">${stats.avgScore}%</div>
+                <div>Score moyen</div>
+              </div>
+              <div class="stat-card" style="background: linear-gradient(135deg, #6f42c1, #5a2d91); color: white; padding: 20px; border-radius: 12px; text-align: center;">
+                <div style="font-size: 2rem; font-weight: bold;">${stats.totalQuestions}</div>
+                <div>Questions répondues</div>
+              </div>
+              ${stats.trend ? `
+              <div class="stat-card" style="background: linear-gradient(135deg, #fd7e14, #e8590c); color: white; padding: 20px; border-radius: 12px; text-align: center;">
+                <div style="font-size: 1.2rem; font-weight: bold;">${stats.trend}</div>
+                <div>Tendance récente</div>
+              </div>
+              ` : ''}
+            </div>
+          `;
+        }
+      }
+
+      // Tableau détaillé
+      if (filtered.length > 0) {
+        html += `
+          <div class="table-container">
+            <table class="score-table">
+              <tr>
+                <th>📅 Date</th>
+                <th>🎯 Mode</th>
+                <th>🌍 Langue</th>
+                <th>📚 Thèmes</th>
+                <th>📊 Score</th>
+                <th>🎖️ Détails</th>
+              </tr>
+        `;
+
+        filtered.forEach(session => {
+          // Gestion sécurisée des données de session
+          const percentage = session.percentage || 0;
+          const correctAnswers = session.correctAnswers || 0;
+          const totalQuestions = session.totalQuestions || 0;
+          const themes = session.themes || [];
+          const language = session.language || 'Non spécifié';
+          const mode = session.mode || 'Non spécifié';
+          const weightedPercentage = session.weightedPercentage || percentage;
+          const themeBreakdown = session.themeBreakdown || {};
+          
+          const scoreColor = percentage >= 70 ? '#28a745' : 
+                           percentage >= 50 ? '#ffc107' : '#dc3545';
+          
+          const themesText = themes.length > 2 ? 
+            `${themes.slice(0, 2).join(', ')}... (+${themes.length - 2})` :
+            themes.join(', ') || 'Aucun thème';
+
+          html += `
+            <tr onclick="showSessionDetail('${session.id || 'unknown'}')" style="cursor: pointer;">
+              <td>${formatDate(session.timestamp)}</td>
+              <td>${formatMode(mode)}</td>
+              <td>${language.charAt(0).toUpperCase() + language.slice(1)}</td>
+              <td style="font-size: 0.8rem;" title="${themes.join(', ')}">${themesText}</td>
+              <td>
+                <span style="color: ${scoreColor}; font-weight: bold;">
+                  ${correctAnswers}/${totalQuestions}
+                </span>
+                <div style="font-size: 0.8rem; color: #666;">${percentage}%</div>
+              </td>
+              <td>
+                ${weightedPercentage !== percentage ? 
+                  `<div style="font-size: 0.8rem; color: #666;">Pondéré: ${weightedPercentage}%</div>` : 
+                  ''
+                }
+                ${Object.keys(themeBreakdown).length > 1 ? 
+                  `<div style="font-size: 0.7rem; color: #999;">Multi-thèmes</div>` : 
+                  ''
+                }
+              </td>
+            </tr>
+          `;
+        });
+
+        html += '</table></div>';
+      }
+
+      // Historique legacy (ancien système)
+      if (legacyHistory.length > 0) {
+        html += `
+          <div style="margin-top: 32px; padding: 16px; background: rgba(255, 193, 7, 0.1); border-radius: 12px; border-left: 4px solid #ffc107;">
+            <h4 style="color: #856404; margin-bottom: 12px;">📜 Ancien historique (format legacy)</h4>
+            <div class="table-container">
+              <table class="score-table" style="font-size: 0.85rem;">
+                <tr><th>Date</th><th>Mode</th><th>Langue</th><th>Score</th></tr>
+        `;
+        
+        legacyHistory.reverse().slice(0, 10).forEach(item => {
+          html += `<tr><td>${item.date}</td><td>${item.mode}</td><td>${item.lang || 'N/A'}</td><td>${item.score} / ${item.total}</td></tr>`;
+        });
+        
+        html += `
+              </table>
+            </div>
+            <p style="font-size: 0.8rem; color: #856404; margin-top: 8px; margin-bottom: 0;">
+              ⚠️ Ces données utilisent l'ancien format. Les nouvelles évaluations apparaîtront dans le tableau principal.
+            </p>
+          </div>
+        `;
+      }
+
+      historyDiv.innerHTML = html;
     }
+
+    /**
+     * Formate une durée en millisecondes en format lisible
+     */
+    function formatDuration(ms) {
+      if (!ms || ms === 0) return '0s';
+      
+      const seconds = Math.floor(ms / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      
+      if (hours > 0) {
+        return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+      } else if (minutes > 0) {
+        return `${minutes}m ${seconds % 60}s`;
+      } else {
+        return `${seconds}s`;
+      }
+    }
+
+    /**
+     * Affiche les détails d'une session avec modal complet
+     */
+    function showSessionDetail(sessionId) {
+      const history = getEvaluationHistory();
+      const session = history.find(s => s.id === sessionId);
+      if (!session) return;
+
+      // Gestion sécurisée des données de session
+      const percentage = session.percentage || 0;
+      const correctAnswers = session.correctAnswers || 0;
+      const totalQuestions = session.totalQuestions || 0;
+      const themes = session.themes || [];
+      const language = session.language || 'Non spécifié';
+      const mode = session.mode || 'Non spécifié';
+      const weightedPercentage = session.weightedPercentage || percentage;
+      const themeBreakdown = session.themeBreakdown || {};
+      const totalTime = session.totalTime || 0;
+
+      let html = `
+        <div class="session-detail">
+          <h4>Détail de la session du ${formatDate(session.timestamp)}</h4>
+          <div class="row" style="margin-bottom: 20px;">
+            <div class="col-md-6">
+              <p><strong>Mode:</strong> ${formatMode(mode)}</p>
+              <p><strong>Langue:</strong> ${language}</p>
+              <p><strong>Score:</strong> ${correctAnswers}/${totalQuestions} (${percentage}%)</p>
+              ${weightedPercentage !== percentage ? 
+                `<p><strong>Score pondéré:</strong> ${weightedPercentage}%</p>` : 
+                ''
+              }
+            </div>
+            <div class="col-md-6">
+              <p><strong>Thèmes:</strong> ${themes.length > 0 ? themes.join(', ') : 'Aucun thème'}</p>
+              <p><strong>Temps total:</strong> ${formatDuration(totalTime)}</p>
+              <p><strong>Temps moyen/question:</strong> ${totalQuestions > 0 ? formatDuration(totalTime / totalQuestions) : 'N/A'}</p>
+            </div>
+          </div>
+      `;
+
+      if (themeBreakdown && Object.keys(themeBreakdown).length > 0) {
+        html += `
+          <h5>Performance par thème:</h5>
+          <div class="row">
+        `;
+        
+        Object.entries(themeBreakdown).forEach(([theme, data]) => {
+          // Gestion sécurisée des données de thème
+          const correct = data?.correct || 0;
+          const total = data?.total || 0;
+          const themePercentage = total > 0 ? Math.round((correct / total) * 100) : 0;
+          const color = themePercentage >= 70 ? '#28a745' : 
+                       themePercentage >= 50 ? '#ffc107' : '#dc3545';
+          
+          html += `
+            <div class="col-md-6" style="margin-bottom: 10px;">
+              <div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; border-left: 4px solid ${color};">
+                <strong>${theme}</strong><br>
+                <span style="color: ${color};">${correct}/${total} (${themePercentage}%)</span>
+              </div>
+            </div>
+          `;
+        });
+        
+        html += `</div>`;
+      }
+
+      html += `</div>`;
+
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed; 
+        top: 0; 
+        left: 0; 
+        right: 0; 
+        bottom: 0; 
+        background: rgba(0,0,0,0.8); 
+        z-index: 1000; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+      `;
+      
+      modal.innerHTML = `
+        <div style="background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05)); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 30px; max-width: 800px; max-height: 80vh; overflow-y: auto; color: white;" onclick="event.stopPropagation()">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0;">Détail de la session</h3>
+            <button id="closeModalBtn" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">&times;</button>
+          </div>
+          ${html}
+        </div>
+      `;
+      
+      // Fonction de fermeture propre
+      function closeModal() {
+        if (modal && modal.parentNode) {
+          modal.remove();
+        }
+      }
+      
+      // Event listeners pour fermeture
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+          closeModal();
+        }
+      });
+      
+      modal.querySelector('#closeModalBtn').addEventListener('click', closeModal);
+      
+      // Fermeture avec Escape
+      function handleKeyDown(e) {
+        if (e.key === 'Escape') {
+          closeModal();
+          document.removeEventListener('keydown', handleKeyDown);
+        }
+      }
+      document.addEventListener('keydown', handleKeyDown);
+      
+      document.body.appendChild(modal);
+    }
+
+    // Event listeners pour les filtres
     document.getElementById('modeFilter').addEventListener('change', function() {
       renderHistory(this.value, document.getElementById('langFilter').value);
     });
+    
     document.getElementById('langFilter').addEventListener('change', function() {
       renderHistory(document.getElementById('modeFilter').value, this.value);
     });
-    renderHistory();
+
+    // Mise à jour des options de filtre selon les données disponibles
+    function updateFilterOptions() {
+      const history = getEvaluationHistory();
+      // Filtrer les valeurs null/undefined et créer des sets uniques
+      const modes = [...new Set(history.map(s => s.mode).filter(mode => mode))];
+      const languages = [...new Set(history.map(s => s.language).filter(lang => lang))];
+      
+      // Mise à jour filtre mode
+      const modeSelect = document.getElementById('modeFilter');
+      modeSelect.innerHTML = '<option value="all">Tous les modes</option>';
+      modes.forEach(mode => {
+        modeSelect.innerHTML += `<option value="${mode}">${formatMode(mode)}</option>`;
+      });
+      
+      // Mise à jour filtre langue
+      const langSelect = document.getElementById('langFilter');
+      langSelect.innerHTML = '<option value="all">Toutes les langues</option>';
+      languages.forEach(lang => {
+        langSelect.innerHTML += `<option value="${lang}">${lang.charAt(0).toUpperCase() + lang.slice(1)}</option>`;
+      });
+    }
+
+    // Initialisation
+    document.addEventListener('DOMContentLoaded', function() {
+      updateFilterOptions();
+      renderHistory();
+    });
   </script>
 </body>
 </html>
