@@ -1578,8 +1578,40 @@ function showPerformanceDashboard() {
   }
 }
 
+/**
+ * Test de diagnostic pour les fonctions critiques
+ */
+function runDiagnosticTests() {
+  console.group('🔧 TESTS DIAGNOSTICS');
+  
+  // Test localStorage
+  try {
+    localStorage.setItem('test_key', 'test_value');
+    localStorage.removeItem('test_key');
+    console.log('✅ localStorage: OK');
+  } catch (error) {
+    console.error('❌ localStorage: ERREUR', error);
+  }
+  
+  // Test SafeStorage si disponible
+  if (window.SafeStorage) {
+    try {
+      SafeStorage.setItem('test', { test: true });
+      SafeStorage.getItem('test');
+      console.log('✅ SafeStorage: OK');
+    } catch (error) {
+      console.error('❌ SafeStorage: ERREUR', error);
+    }
+  }
+  
+  console.groupEnd();
+}
+
 // Monitoring automatique et accessibilité
 document.addEventListener('DOMContentLoaded', function() {
+  // Tests diagnostics immédiats
+  runDiagnosticTests();
+  
   // Délai pour laisser le temps aux autres scripts de se charger
   setTimeout(() => {
     // Performance et stockage

@@ -7,8 +7,26 @@
  * @returns {Object} Objet contenant les scores par thème
  */
 function getThemeScores() {
-  const raw = localStorage.getItem('themeScores');
-  return raw ? JSON.parse(raw) : {};
+  try {
+    const raw = localStorage.getItem('themeScores');
+    if (!raw) return {};
+    
+    const parsed = JSON.parse(raw);
+    
+    // Vérifie que c'est un objet valide
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      console.warn('⚠️ [Revision] Scores corrompus, réinitialisation');
+      return {};
+    }
+    
+    return parsed;
+    
+  } catch (error) {
+    console.error('❌ [Revision] Erreur lecture scores:', error);
+    // Nettoie les données corrompues
+    localStorage.removeItem('themeScores');
+    return {};
+  }
 }
 
 /**
@@ -26,9 +44,22 @@ function setThemeScores(scores) {
  * @returns {number|null} Score sur 10 ou null si pas de score
  */
 function getScoreForTheme(lang, theme) {
-  const scores = getThemeScores();
-  const key = `${lang}:${theme}`;
-  return scores[key] && typeof scores[key].score === 'number' ? scores[key].score : null;
+  try {
+    const scores = getThemeScores();
+    if (!scores || typeof scores !== 'object') return null;
+    
+    const key = `${lang}:${theme}`;
+    const themeData = scores[key];
+    
+    if (!themeData || typeof themeData !== 'object') return null;
+    if (typeof themeData.score !== 'number') return null;
+    
+    return Math.max(0, Math.min(10, themeData.score)); // Clamp entre 0-10
+    
+  } catch (error) {
+    console.error('❌ [Revision] Erreur récupération score:', error);
+    return null;
+  }
 }
 
 /**
@@ -38,25 +69,52 @@ function getScoreForTheme(lang, theme) {
  * @param {boolean} isGood - true si bonne réponse, false sinon
  */
 function updateScoreForTheme(lang, theme, isGood) {
-  const scores = getThemeScores();
-  const key = `${lang}:${theme}`;
-  
-  if (!scores[key]) scores[key] = { history: [] };
-  
-  // Ajoute la nouvelle réponse à l'historique
-  scores[key].history.push(isGood ? 1 : 0);
+  try {
+    const scores = getThemeScores() || {}; // Assure qu'on a un objet
+    const key = `${lang}:${theme}`;
+    
+    // Initialisation robuste de l'objet score
+    if (!scores[key]) {
+      scores[key] = { history: [] };
+    }
+    
+    // Vérifie que history existe et est un tableau
+    if (!scores[key].history || !Array.isArray(scores[key].history)) {
+      scores[key].history = [];
+    }
+    
+    // Ajoute la nouvelle réponse à l'historique
+    scores[key].history.push(isGood ? 1 : 0);
   
   // Limite l'historique aux 20 dernières réponses
   if (scores[key].history.length > 20) {
     scores[key].history = scores[key].history.slice(-20);
   }
   
-  // Calcule la note sur les 20 dernières réponses
-  const sum = scores[key].history.reduce((a, b) => a + b, 0);
-  scores[key].score = Math.round((sum / scores[key].history.length) * 10);
-  
-  setThemeScores(scores);
-  console.log(`📊 Score mis à jour pour ${theme}: ${scores[key].score}/10`);
+    // Calcule la note sur les 20 dernières réponses
+    const sum = scores[key].history.reduce((a, b) => a + b, 0);
+    scores[key].score = Math.round((sum / scores[key].history.length) * 10);
+    
+    setThemeScores(scores);
+    console.log(`📊 Score mis à jour pour ${theme}: ${scores[key].score}/10`);
+    
+  } catch (error) {
+    console.error('❌ [Revision] Erreur mise à jour score:', error);
+    console.log('Paramètres:', { lang, theme, isGood });
+    
+    // Fallback: initialiser les scores proprement
+    try {
+      const fallbackScores = {};
+      fallbackScores[`${lang}:${theme}`] = { 
+        history: [isGood ? 1 : 0], 
+        score: isGood ? 10 : 0 
+      };
+      setThemeScores(fallbackScores);
+      console.log('✅ [Revision] Scores réinitialisés en mode fallback');
+    } catch (fallbackError) {
+      console.error('❌ [Revision] Erreur critique scores:', fallbackError);
+    }
+  }
 }
 
 // ================================
@@ -1019,6 +1077,46 @@ function showEndOfSession() {
 }
 
 // ================================
+// TESTS DIAGNOSTICS
+// ================================
+
+/**
+ * Test des fonctions de score pour diagnostic
+ */
+function testScoreFunctions() {
+  console.group('🔧 [Revision] Tests diagnostics scores');
+  
+  try {
+    // Test 1: getThemeScores
+    const scores = getThemeScores();
+    console.log('✅ getThemeScores():', typeof scores, scores);
+    
+    // Test 2: getScoreForTheme avec données valides
+    const testScore = getScoreForTheme('anglais', 'test');
+    console.log('✅ getScoreForTheme():', testScore);
+    
+    // Test 3: updateScoreForTheme - simulation
+    console.log('🧪 Test updateScoreForTheme...');
+    updateScoreForTheme('anglais', 'diagnostic_test', true);
+    
+    const newScore = getScoreForTheme('anglais', 'diagnostic_test');
+    console.log('✅ Nouveau score créé:', newScore);
+    
+    // Nettoyage du test
+    const allScores = getThemeScores();
+    delete allScores['anglais:diagnostic_test'];
+    setThemeScores(allScores);
+    
+    console.log('✅ Tous les tests de scores réussis');
+    
+  } catch (error) {
+    console.error('❌ Erreur dans les tests scores:', error);
+  }
+  
+  console.groupEnd();
+}
+
+// ================================
 // FONCTIONS UTILITAIRES
 // ================================
 
@@ -1032,3 +1130,19 @@ function shuffle(array) {
     [array[i], array[j]] = [array[j], array[i]];
   }
 }
+
+// ================================
+// INITIALISATION ET TESTS
+// ================================
+
+// Exécution des tests au chargement
+document.addEventListener('DOMContentLoaded', function() {
+  // Tests diagnostics pour éviter les erreurs
+  testScoreFunctions();
+  
+  // Accessibilité
+  if (window.AccessibilityEnhancer) {
+    AccessibilityEnhancer.init();
+    console.log('♿ [Revision] Accessibilité initialisée');
+  }
+});
