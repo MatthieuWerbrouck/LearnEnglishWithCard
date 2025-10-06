@@ -1,579 +1,886 @@
+// Toute la nouvelle logique d'évaluation doit être écrite ici.
+// Ne pas utiliser evaluation.old.js dans le code actif.
+// Utilisez-le uniquement pour consultation ou inspiration.
 
-/*
-// =======================
-// Ancienne logique d'évaluation (mise de côté)
-// =======================
-// Nouvelle logique : sélection de thèmes avant le quiz
-let allCards = [];
-let dataByLang = {};
-let allLangs = [];
-let selectedLang = null;
-let themes = [];
-let selectedThemes = [];
-let cards = [];
-let currentIndex = 0;
-let score = 0;
+// Nouvelle logique d'évaluation - étape 1 : sélection dynamique de la langue
+// Système de cache optimisé pour limiter les appels à SheetDB
 
-let scoreQCM = 0;
-let scoreQCMFrEn = 0;
-let scoreLibre = 0;
-let currentMode = '';
+let sheetDBData = null;
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes en millisecondes
+const CACHE_KEY = 'sheetDB_cache';
+const CACHE_TIMESTAMP_KEY = 'sheetDB_cache_timestamp';
 
-const langSelectDiv = document.getElementById('langSelect');
-const themeSelectDiv = document.getElementById('themeSelect');
-const startBtn = document.getElementById('startBtn');
-const selectAllThemesBtn = document.getElementById('selectAllThemesBtn');
-const themeSearchInput = document.getElementById('themeSearch');
-const modeSelectDiv = document.getElementById('modeSelect');
-
-let evalMode = 'mcq'; // 'mcq' ou 'input'
-
-if (!window.sheetDBData) {
-  window.sheetDBPromise = fetch('https://sheetdb.io/api/v1/xg3dj9vsovufe')
-    .then(r => r.json())
-    .then(data => {
-      window.sheetDBData = data;
-      return data;
-    });
-}
-window.sheetDBPromise.then(data => {
-  allCards = data;
-  data.forEach(card => {
-    const lang = card.langue && card.langue.trim();
-    const theme = card.theme && card.theme.trim();
-    if (!lang || !theme) return;
-    if (!dataByLang[lang]) dataByLang[lang] = {};
-    if (!dataByLang[lang][theme]) dataByLang[lang][theme] = [];
-    dataByLang[lang][theme].push(card);
-  });
-  allLangs = Object.keys(dataByLang);
-  showLangSelection();
-});
-
-function showLangSelection() {
-  langSelectDiv.innerHTML = '<h2>Choisis la langue à évaluer :</h2>';
-  allLangs.forEach(lang => {
-    const btn = document.createElement('button');
-    btn.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
-    btn.className = 'main-btn';
-    btn.onclick = () => selectLang(lang);
-    langSelectDiv.appendChild(btn);
-  });
+// Fonction utilitaire pour afficher le statut du cache
+function getCacheStatus() {
+  const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+  const cachedData = localStorage.getItem(CACHE_KEY);
+  
+  if (!timestamp || !cachedData) {
+    return { status: 'empty', message: 'Aucun cache' };
+  }
+  
+  const age = Date.now() - parseInt(timestamp);
+  const remainingTime = CACHE_DURATION - age;
+  
+  if (remainingTime <= 0) {
+    return { status: 'expired', message: 'Cache expiré' };
+  }
+  
+  const remainingMinutes = Math.floor(remainingTime / (60 * 1000));
+  return { 
+    status: 'valid', 
+    message: `Cache valide (${remainingMinutes} min restantes)`,
+    remainingTime: remainingTime
+  };
 }
 
-function selectLang(lang) {
-  selectedLang = lang;
-  themes = Object.keys(dataByLang[lang]);
-  langSelectDiv.style.display = 'none';
-  modeSelectDiv.style.display = '';
-  themeSelectDiv.style.display = '';
-  showThemeSelection();
-}
-
-function showThemeSelection() {
-  themeSelectDiv.innerHTML = '<h2>Choisis un ou plusieurs thèmes :</h2>';
-  // Ajoute la barre de recherche et le bouton tout sélectionner
-  themeSearchInput.style.display = '';
-  themeSelectDiv.appendChild(themeSearchInput);
-  selectAllThemesBtn.style.display = '';
-  themeSelectDiv.appendChild(selectAllThemesBtn);
-
-  let validThemes = themes.filter(t => t && t.trim() !== '');
-  // Stocke la liste complète pour le filtrage
-  themeSelectDiv._allThemes = validThemes;
-
-  renderThemeCheckboxes(validThemes);
-
-  startBtn.style.display = '';
-  document.getElementById('questionCountDiv').style.display = '';
-  updateQuestionCountDefault();
-}
-
-function updateQuestionCountDefault() {
-  const questionCountInput = document.getElementById('questionCount');
-  const checkedThemes = Array.from(themeSelectDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-  let totalWords = 0;
-  checkedThemes.forEach(theme => {
-    totalWords += dataByLang[selectedLang][theme] ? dataByLang[selectedLang][theme].length : 0;
-  });
-  questionCountInput.value = totalWords || 1;
-}
-
-// Fonction pour afficher les thèmes filtrés
-function renderThemeCheckboxes(themeList) {
-  // Sauvegarde les thèmes actuellement cochés
-  const checkedThemes = Array.from(themeSelectDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-  // Supprime les anciens checkboxes
-  Array.from(themeSelectDiv.querySelectorAll('label')).forEach(e => e.remove());
-  themeList.forEach(theme => {
-    const label = document.createElement('label');
-    label.style.display = 'block';
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.value = theme;
-    // Restaure l'état coché si le thème était sélectionné
-    if (checkedThemes.includes(theme)) checkbox.checked = true;
-    checkbox.onchange = updateQuestionCountDefault;
-    label.appendChild(checkbox);
-    // Affiche le score et le nombre de mots à côté du nom du thème
-    const key = selectedLang + ':' + theme;
-    let scoreText = '';
-    let scores = localStorage.getItem('themeScores');
-    let scoreObj = scores ? JSON.parse(scores) : {};
-    if (scoreObj[key] && typeof scoreObj[key].score === 'number') {
-      scoreText = ` (note: ${scoreObj[key].score}/10)`;
+// Fonctions de gestion du cache
+function getCachedData() {
+  try {
+    const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+    const cachedData = localStorage.getItem(CACHE_KEY);
+    
+    if (!timestamp || !cachedData) {
+      return null;
     }
-    // Nombre de mots
-    let wordCount = dataByLang[selectedLang][theme] ? dataByLang[selectedLang][theme].length : 0;
-    let countText = ` (${wordCount} mots)`;
-    label.appendChild(document.createTextNode(' ' + theme + scoreText + countText));
-    themeSelectDiv.appendChild(label);
-  });
-}
-
-// Barre de recherche : filtre la liste des thèmes
-themeSearchInput.oninput = function() {
-  const search = themeSearchInput.value.trim().toLowerCase();
-  const allThemes = themeSelectDiv._allThemes || [];
-  let filtered;
-  if (search === '') {
-    filtered = allThemes;
-  } else {
-    filtered = allThemes.filter(theme => theme.toLowerCase().includes(search));
-  }
-  renderThemeCheckboxes(filtered);
-  updateQuestionCountDefault();
-};
-
-selectAllThemesBtn.onclick = function() {
-  const checkboxes = Array.from(themeSelectDiv.querySelectorAll('input[type="checkbox"]'));
-  const allChecked = checkboxes.every(cb => cb.checked);
-  checkboxes.forEach(cb => cb.checked = !allChecked);
-  updateQuestionCountDefault();
-};
-
-startBtn.onclick = function() {
-  selectedThemes = Array.from(themeSelectDiv.querySelectorAll('input:checked')).map(cb => cb.value);
-  if (selectedThemes.length === 0) {
-    alert('Sélectionnez au moins un thème !');
-    return;
-  }
-  // Récupère la valeur choisie (modifiée ou par défaut)
-  maxQuestions = parseInt(document.getElementById('questionCount').value) || 1;
-  // Filtre les cartes selon la langue et les thèmes choisis
-  cards = [];
-  selectedThemes.forEach(theme => {
-    cards = cards.concat(dataByLang[selectedLang][theme]);
-  });
-  let langKey = selectedLang === 'anglais' ? 'en' : (selectedLang === 'japonais' ? 'ja' : selectedLang);
-  cards = cards.map(card => ({ question: card[langKey], answer: card.fr, theme: card.theme }));
-  shuffle(cards);
-  currentIndex = 0;
-  score = 0;
-  themeSelectDiv.style.display = 'none';
-  startBtn.style.display = 'none';
-  document.getElementById('flashcardSection').style.display = '';
-  showCard();
-};
-
-
-// =============================
-// 2. Fonction utilitaire pour mélanger un tableau (algorithme de Fisher-Yates)
-// =============================
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
-  }
-}
-
-
-// =============================
-// 3. Initialisation des variables d'état
-// =============================
-// ...variables déjà déclarées plus haut...
-
-
-
-// =============================
-// 4. Récupération des éléments du DOM
-// =============================
-const flashcard = document.getElementById('flashcard'); // Élément principal de la carte
-const cardFront = document.getElementById('cardFront'); // Face avant (mot anglais)
-const answersDiv = document.getElementById('answers');  // Conteneur des réponses
-const feedbackDiv = document.getElementById('feedback');// Message de feedback
-const nextBtn = document.getElementById('nextBtn');     // Bouton "carte suivante"
-// Ajout pour sélection des thèmes
-// <div id="themeSelect"></div><button id="startBtn" style="display:none">Démarrer l'évaluation</button>
-
-
-// =============================
-// 5. Affiche la carte courante et génère les réponses aléatoires
-// =============================
-function showCard() {
-  if (!cards.length) return;
-  if (currentIndex >= maxQuestions) {
-    // Fin de l'évaluation
-    answersDiv.innerHTML = '';
-    cardFront.textContent = '';
-    feedbackDiv.innerHTML = `Évaluation terminée !<br>Score : <b>${score} / ${maxQuestions}</b>`;
-    nextBtn.style.display = 'none';
-    // Ajoute le bouton recommencer
-    let restartBtn = document.createElement('button');
-    restartBtn.textContent = 'Recommencer';
-    restartBtn.className = 'main-btn';
-    restartBtn.style.marginTop = '24px';
-    restartBtn.onclick = function() {
-      window.location.reload();
-    };
-    feedbackDiv.appendChild(restartBtn);
-    return;
-  }
-  const card = cards[currentIndex];
-  // Affiche le numéro de la question en cours
-  let questionNumDiv = document.getElementById('questionNumDiv');
-  if (!questionNumDiv) {
-    questionNumDiv = document.createElement('div');
-    questionNumDiv.id = 'questionNumDiv';
-    questionNumDiv.style.textAlign = 'center';
-    questionNumDiv.style.fontSize = '1.1em';
-    questionNumDiv.style.marginBottom = '12px';
-    document.getElementById('flashcardSection').insertBefore(questionNumDiv, document.getElementById('flashcardSection').firstChild);
-  }
-  questionNumDiv.textContent = `Question ${currentIndex + 1} / ${maxQuestions}`;
-  cardFront.textContent = card.question;
-  answersDiv.innerHTML = '';
-  feedbackDiv.textContent = '';
-  nextBtn.style.display = 'none';
-
-  if (getEvalMode() === 'mcq') {
-    // Mode QCM (4 choix)
-    let wrongAnswers = cards.filter(c => c.answer !== card.answer);
-    shuffle(wrongAnswers);
-    let options = wrongAnswers.slice(0, 3).map(c => c.answer);
-    options.push(card.answer);
-    shuffle(options);
-    const grid = document.createElement('div');
-    grid.style.display = 'grid';
-    grid.style.gridTemplateColumns = '1fr 1fr';
-    grid.style.gap = '16px';
-    grid.style.maxWidth = '400px';
-    grid.style.margin = '0 auto';
-    options.forEach(option => {
-      const btn = document.createElement('button');
-      btn.textContent = option;
-      btn.className = 'answer-btn';
-      btn.style.width = '100%';
-      btn.onclick = () => selectAnswer(option, card.answer, btn);
-      grid.appendChild(btn);
-    });
-    answersDiv.appendChild(grid);
-  } else {
-    // Mode saisie texte
-    const inputDiv = document.createElement('div');
-    inputDiv.style.textAlign = 'center';
-    inputDiv.style.marginTop = '18px';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'form-input';
-    input.placeholder = 'Écris la réponse...';
-    input.style.width = '70%';
-    input.style.fontSize = '1.1em';
-    inputDiv.appendChild(input);
-
-    const submitBtn = document.createElement('button');
-    submitBtn.textContent = 'Valider';
-    submitBtn.className = 'main-btn';
-    submitBtn.style.marginLeft = '12px';
-    submitBtn.onclick = function() {
-      submitBtn.disabled = true;
-      input.disabled = true;
-      selectTextAnswer(input.value, card.answer, input, submitBtn);
-    };
-    // Ajout : validation avec la touche "Entrée"
-    input.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' && !submitBtn.disabled && !input.disabled) {
-        submitBtn.click();
-      }
-    });
-
-    inputDiv.appendChild(submitBtn);
-    answersDiv.appendChild(inputDiv);
-  }
-}
-
-// Récupère le mode choisi
-function getEvalMode() {
-  const radios = document.getElementsByName('evalMode');
-  for (let r of radios) {
-    if (r.checked) return r.value;
-  }
-  return 'mcq';
-}
-
-// Met à jour le mode à chaque changement
-modeSelectDiv.addEventListener('change', function() {
-  evalMode = getEvalMode();
-});
-
-// Afficher le choix du mode d'évaluation au chargement de la page
-window.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('modeSelectDiv').style.display = 'block';
-  document.getElementById('startBtn').addEventListener('click', function() {
-    document.getElementById('modeSelectDiv').style.display = 'none';
-  });
-});
-
-// =============================
-// 6. Gestion de la sélection d'une réponse
-// =============================
-function selectAnswer(selected, correct, btn) {
-  // Désactive tous les boutons de réponse
-  const grid = answersDiv.querySelector('div');
-  if (grid) {
-    Array.from(grid.children).forEach(b => b.disabled = true);
-  }
-  // Mise à jour du score du thème courant
-  if (cards && cards.length) {
-    let theme = null;
-    // On récupère le thème de la carte courante si présent et non vide
-    if (
-      cards[currentIndex] &&
-      typeof cards[currentIndex].theme === "string" &&
-      cards[currentIndex].theme.length > 0
-    ) {
-      theme = cards[currentIndex].theme;
-    } else if (
-      selectedThemes &&
-      selectedThemes.length === 1 &&
-      typeof selectedThemes[0] === "string" &&
-      selectedThemes[0].length > 0
-    ) {
-      theme = selectedThemes[0];
+    
+    const age = Date.now() - parseInt(timestamp);
+    if (age > CACHE_DURATION) {
+      // Cache expiré, on le supprime
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+      return null;
     }
-    // Correction : vérifie que theme est une chaîne non vide
-    if (typeof theme === "string" && theme.length > 0) {
-      const scores = localStorage.getItem('themeScores');
-      let obj = scores ? JSON.parse(scores) : {};
-      const key = selectedLang + ':' + theme;
-      // Correction : initialisation stricte de obj[key] et obj[key].history
-      if (!obj[key] || !Array.isArray(obj[key].history)) {
-        obj[key] = { history: [] };
-      }
-      obj[key].history.push(selected === correct ? 1 : 0);
-      if (obj[key].history.length > 20) obj[key].history = obj[key].history.slice(-20);
-      const sum = obj[key].history.reduce((a, b) => a + b, 0);
-      obj[key].score = Math.round((sum / obj[key].history.length) * 10);
-      localStorage.setItem('themeScores', JSON.stringify(obj));
-    }
+    
+    return JSON.parse(cachedData);
+  } catch (error) {
+    console.warn('Erreur lors de la lecture du cache:', error);
+    return null;
   }
-  if (selected === correct) {
-    btn.style.background = '#4caf50'; // vert
-    feedbackDiv.textContent = 'Bonne réponse !';
-    score++;
-  } else {
-    btn.style.background = '#e74c3c'; // rouge
-    feedbackDiv.textContent = `Mauvaise réponse. La bonne réponse était : ${correct}`;
-    // Met en surbrillance la bonne réponse
-    const grid = answersDiv.querySelector('div');
-    if (grid) {
-      Array.from(grid.children).forEach(b => {
-        if (b.textContent === correct) b.style.background = '#4caf50';
+}
+
+function setCachedData(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+    localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+    console.log('✅ Données mises en cache pour 30 minutes');
+  } catch (error) {
+    console.warn('Erreur lors de la mise en cache:', error);
+  }
+}
+
+function loadSheetDBData() {
+  return new Promise((resolve, reject) => {
+    // 1. Vérifier le cache global en mémoire
+    if (sheetDBData) {
+      console.log('📦 Utilisation des données en mémoire');
+      resolve(sheetDBData);
+      return;
+    }
+    
+    // 2. Vérifier le cache localStorage
+    const cachedData = getCachedData();
+    if (cachedData) {
+      console.log('💾 Utilisation des données en cache (localStorage)');
+      sheetDBData = cachedData;
+      resolve(cachedData);
+      return;
+    }
+    
+    // 3. Vérifier si les données sont déjà en cours de chargement
+    if (window.sheetDBPromise) {
+      console.log('⏳ Utilisation du chargement en cours...');
+      window.sheetDBPromise.then(resolve).catch(reject);
+      return;
+    }
+    
+    // 4. Charger depuis l'API en dernier recours
+    console.log('🌐 Chargement depuis SheetDB (nouvel appel API)');
+    window.sheetDBPromise = fetch('https://sheetdb.io/api/v1/xg3dj9vsovufe')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        sheetDBData = data;
+        setCachedData(data);
+        window.sheetDBPromise = null; // Libère la promesse
+        return data;
+      })
+      .catch(error => {
+        console.error('❌ Erreur lors du chargement:', error);
+        window.sheetDBPromise = null;
+        throw error;
       });
+    
+    window.sheetDBPromise.then(resolve).catch(reject);
+  });
+}
+
+window.addEventListener('DOMContentLoaded', function() {
+  const langSelectDiv = document.getElementById('langSelect');
+  if (!langSelectDiv) return;
+
+  function processData(data) {
+    // Extrait toutes les langues uniques
+    const langs = [...new Set(data.map(card => card.langue && card.langue.trim()).filter(Boolean))];
+    langSelectDiv.innerHTML = '<h2>Sélectionnez la langue à étudier :</h2>';
+    langs.forEach(lang => {
+      const btn = document.createElement('button');
+      btn.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
+      btn.className = 'main-btn';
+      btn.style.margin = '12px';
+      btn.onclick = function() {
+        window.selectedLang = lang;
+        langSelectDiv.style.display = 'none';
+        showModeSelection();
+      };
+      langSelectDiv.appendChild(btn);
+    });
+  }
+
+  function showModeSelection() {
+    const modeDiv = document.getElementById('modeSelectDiv');
+    if (!modeDiv) return;
+    modeDiv.style.display = '';
+    modeDiv.innerHTML = `
+      <h2>Choisissez le type d'évaluation :</h2>
+      <button class="main-btn" style="margin:12px;" data-mode="qcm_fr_lang">QCM : mot français, choix langue étudiée</button>
+      <button class="main-btn" style="margin:12px;" data-mode="qcm_lang_fr">QCM : mot langue étudiée, choix français</button>
+      <button class="main-btn" style="margin:12px;" data-mode="libre">Réponse libre : mot langue étudiée</button>
+    `;
+    Array.from(modeDiv.querySelectorAll('button')).forEach(btn => {
+      btn.onclick = function() {
+        window.selectedEvalMode = btn.getAttribute('data-mode');
+        modeDiv.style.display = 'none';
+        showThemeSelection();
+      };
+    });
+  }
+
+  function showThemeSelection() {
+    const themeDiv = document.getElementById('themeSelect');
+    if (!themeDiv) return;
+    themeDiv.style.display = '';
+    
+    // Ré-affiche le bouton "Retour" du HTML
+    const htmlReturnBtn = document.querySelector('button[onclick*="index.html"]');
+    if (htmlReturnBtn) htmlReturnBtn.style.display = '';
+    themeDiv.innerHTML = '<h2>Choisissez un ou plusieurs thèmes :</h2>';
+
+    // Ajout de la barre de recherche
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'form-input';
+    searchInput.placeholder = 'Rechercher un thème...';
+    searchInput.style.marginBottom = '12px';
+    themeDiv.appendChild(searchInput);
+
+    // Ajout d'un conteneur scrollable pour les thèmes
+    const scrollContainer = document.createElement('div');
+    scrollContainer.style.maxHeight = '220px';
+    scrollContainer.style.overflowY = 'auto';
+    scrollContainer.style.border = '1px solid #eee';
+    scrollContainer.style.borderRadius = '8px';
+    scrollContainer.style.padding = '8px';
+    scrollContainer.style.background = '#fafafa';
+    scrollContainer.style.marginBottom = '12px';
+    themeDiv.appendChild(scrollContainer);
+
+    // Récupère les thèmes de la langue sélectionnée
+    const themes = [...new Set(sheetDBData
+      .filter(card => card.langue && card.langue.trim() === window.selectedLang)
+      .map(card => card.theme && card.theme.trim())
+      .filter(Boolean)
+    )];
+
+    // Stocke les thèmes cochés (persistant sur toute la sélection)
+    let checkedThemes = [];
+
+    // Fonction pour afficher les thèmes filtrés
+    function renderThemeCheckboxes(filteredThemes) {
+      // Supprime les anciens checkboxes
+      scrollContainer.innerHTML = '';
+      filteredThemes.forEach(theme => {
+        const label = document.createElement('label');
+        label.style.display = 'block';
+        label.style.marginBottom = '6px';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = theme;
+        if (checkedThemes.includes(theme)) checkbox.checked = true;
+        checkbox.onchange = function() {
+          if (checkbox.checked) {
+            if (!checkedThemes.includes(theme)) checkedThemes.push(theme);
+          } else {
+            checkedThemes = checkedThemes.filter(t => t !== theme);
+          }
+          updateQuestionCountDefault();
+        };
+        // Ajoute le tooltip avec le nombre de mots
+        const wordCount = sheetDBData.filter(card =>
+          card.langue && card.langue.trim() === window.selectedLang &&
+          card.theme && card.theme.trim() === theme
+        ).length;
+        label.title = `${wordCount} mot${wordCount > 1 ? 's' : ''} dans ce thème`;
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(' ' + theme));
+        scrollContainer.appendChild(label);
+      });
+      updateQuestionCountDefault();
+    }
+
+    // Ajout du sélecteur du nombre de questions
+    const questionCountDiv = document.getElementById('questionCountDiv');
+    if (questionCountDiv) {
+      questionCountDiv.style.display = '';
+      questionCountDiv.querySelector('#questionCount').value = 1; // Valeur par défaut
+    }
+
+    // Fonction pour mettre à jour le nombre de questions par défaut
+    function updateQuestionCountDefault() {
+      if (!questionCountDiv) return;
+      // Calcule la somme des mots dans les thèmes cochés
+      let totalWords = 0;
+      checkedThemes.forEach(theme => {
+        totalWords += sheetDBData.filter(card =>
+          card.langue && card.langue.trim() === window.selectedLang &&
+          card.theme && card.theme.trim() === theme
+        ).length;
+      });
+      // Met à jour la valeur par défaut
+      const questionCountInput = questionCountDiv.querySelector('#questionCount');
+      questionCountInput.value = totalWords || 1;
+      questionCountInput.max = totalWords || 1;
+    }
+
+    // Affiche tous les thèmes au départ
+    renderThemeCheckboxes(themes);
+
+    // Filtre les thèmes à chaque saisie
+    searchInput.oninput = function() {
+      const search = searchInput.value.trim().toLowerCase();
+      const filtered = themes.filter(theme => theme.toLowerCase().includes(search));
+      renderThemeCheckboxes(filtered);
+    };
+
+    // Bouton pour valider la sélection des thèmes
+    let nextBtn = document.createElement('button');
+    nextBtn.textContent = 'Valider les thèmes';
+    nextBtn.className = 'main-btn';
+    nextBtn.style.marginTop = '18px';
+    nextBtn.onclick = function() {
+      window.selectedThemes = checkedThemes.slice();
+      if (!window.selectedThemes || window.selectedThemes.length === 0) {
+        alert('Veuillez sélectionner au moins un thème.');
+        return;
+      }
+      // Récupère le nombre de questions choisi
+      const questionCountInput = questionCountDiv ? questionCountDiv.querySelector('#questionCount') : null;
+      window.selectedQuestionCount = questionCountInput ? parseInt(questionCountInput.value) || 1 : 1;
+      themeDiv.style.display = 'none';
+      if (questionCountDiv) questionCountDiv.style.display = 'none';
+      showSummaryScreen();
+    };
+
+    // Place le bouton sous le choix du nombre de questions (en bloc séparé)
+    if (questionCountDiv) {
+      // Ajoute un conteneur pour le bouton sous le div questionCountDiv
+      let btnContainer = document.createElement('div');
+      btnContainer.id = 'themeValidationBtnContainer';
+      btnContainer.style.width = '100%';
+      btnContainer.style.textAlign = 'center';
+      btnContainer.appendChild(nextBtn);
+      questionCountDiv.parentNode.insertBefore(btnContainer, questionCountDiv.nextSibling);
+    } else {
+      themeDiv.appendChild(nextBtn);
     }
   }
-  nextBtn.style.display = '';
+
+  function showSummaryScreen() {
+    // Nettoie tous les anciens résumés et TOUS les anciens boutons du DOM
+    const parent = document.querySelector('.container');
+    Array.from(parent.querySelectorAll('#evalSummaryDiv')).forEach(div => div.remove());
+    Array.from(document.querySelectorAll('#backEvalBtn')).forEach(btn => btn.remove());
+    
+    // Nettoie le conteneur de boutons de validation des thèmes
+    const themeValidationContainer = document.getElementById('themeValidationBtnContainer');
+    if (themeValidationContainer) {
+      themeValidationContainer.remove();
+    }
+
+    // Crée le conteneur du résumé
+    let summaryDiv = document.createElement('div');
+    summaryDiv.id = 'evalSummaryDiv';
+    summaryDiv.className = 'form-group';
+    summaryDiv.style.margin = '32px auto';
+    summaryDiv.style.maxWidth = '420px';
+    summaryDiv.style.background = '#f8f8f8';
+    summaryDiv.style.borderRadius = '12px';
+    summaryDiv.style.padding = '24px';
+    summaryDiv.style.boxShadow = '0 2px 12px rgba(0,0,0,0.06)';
+    parent.appendChild(summaryDiv);
+
+    // Masque tous les autres écrans
+    if (langSelectDiv) langSelectDiv.style.display = 'none';
+    const modeDiv = document.getElementById('modeSelectDiv');
+    if (modeDiv) modeDiv.style.display = 'none';
+    const themeDiv = document.getElementById('themeSelect');
+    if (themeDiv) themeDiv.style.display = 'none';
+    const questionCountDiv = document.getElementById('questionCountDiv');
+    if (questionCountDiv) questionCountDiv.style.display = 'none';
+    
+    // Masque le bouton "Retour" du HTML pour éviter la duplication
+    const htmlReturnBtn = document.querySelector('button[onclick*="index.html"]');
+    if (htmlReturnBtn) htmlReturnBtn.style.display = 'none';
+
+    summaryDiv.innerHTML = `
+      <h2 style="margin-bottom:18px;">Résumé de l'évaluation</h2>
+      <div><b>Langue étudiée :</b> ${window.selectedLang ? window.selectedLang.charAt(0).toUpperCase() + window.selectedLang.slice(1) : ''}</div>
+      <div style="margin-top:8px;"><b>Mode :</b> ${
+        window.selectedEvalMode === 'qcm_fr_lang' ? 'QCM : mot français, choix langue étudiée' :
+        window.selectedEvalMode === 'qcm_lang_fr' ? 'QCM : mot langue étudiée, choix français' :
+        window.selectedEvalMode === 'libre' ? 'Réponse libre : mot langue étudiée' : ''
+      }</div>
+      <div style="margin-top:8px;"><b>Thèmes :</b> ${window.selectedThemes ? window.selectedThemes.join(', ') : ''}</div>
+      <div style="margin-top:8px;"><b>Nombre de questions :</b> ${window.selectedQuestionCount || 1}</div>
+      <button id="startEvalBtn" class="main-btn" style="margin-top:24px;width:100%;">Démarrer l'évaluation</button>
+      <button id="backEvalBtn" class="main-btn" style="margin-top:16px;width:100%;">Retour</button>
+    `;
+    summaryDiv.style.display = '';
+
+    document.getElementById('startEvalBtn').onclick = function() {
+      summaryDiv.style.display = 'none';
+      startEvaluation();
+    };
+
+    document.getElementById('backEvalBtn').onclick = function() {
+      summaryDiv.style.display = 'none';
+      showThemeSelection();
+    };
+  }
+
+  // Affiche le statut du cache au démarrage
+  const cacheStatus = getCacheStatus();
+  console.log(`📊 Statut cache SheetDB: ${cacheStatus.message}`);
+  
+  // Chargement optimisé des données avec cache
+  loadSheetDBData()
+    .then(data => {
+      processData(data);
+    })
+    .catch(error => {
+      console.error('Impossible de charger les données:', error);
+      langSelectDiv.innerHTML = `
+        <div style="text-align: center; padding: 20px; background: rgba(239, 68, 68, 0.1); border-radius: 12px; border: 2px solid rgba(239, 68, 68, 0.3); color: #dc2626;">
+          <h3>❌ Erreur de chargement</h3>
+          <p>Impossible de charger les données.</p>
+          <button class="nav-btn" onclick="location.reload()" style="margin-top: 12px;">
+            🔄 Réessayer
+          </button>
+        </div>
+      `;
+    });
+}); // <-- Fin correcte de window.addEventListener
+
+// ========== LOGIQUE D'ÉVALUATION ==========
+
+// Variables globales pour l'évaluation
+let evaluationQuestions = [];
+let currentQuestionIndex = 0;
+let evaluationResults = [];
+
+function startEvaluation() {
+  // Étape 1 : Préparer les données de questions
+  prepareEvaluationData();
+  
+  // Étape 2 : Initialiser l'interface d'évaluation
+  initEvaluationInterface();
+  
+  // Étape 3 : Afficher la première question
+  showQuestion(0);
 }
 
-// Après la validation d'une réponse, afficher le bouton "Carte suivante"
-function handleAnswerValidation(isCorrect) {
-  // ...existing code pour afficher le feedback...
-  document.getElementById('nextBtn').style.display = 'block';
-  // ...existing code...
+function prepareEvaluationData() {
+  // Détermine la clé de langue (comme dans revision.js)
+  let langKey = window.selectedLang === 'anglais' ? 'en' : 
+               (window.selectedLang === 'japonais' ? 'ja' : window.selectedLang);
+  
+  // Debug: affichons la structure des données
+  console.log('Données SheetDB:', sheetDBData ? sheetDBData.slice(0, 2) : 'null');
+  console.log('Langue sélectionnée:', window.selectedLang, '→ clé:', langKey);
+  console.log('Thèmes sélectionnés:', window.selectedThemes);
+  
+  // Filtre les cartes selon les thèmes sélectionnés et la langue
+  const filteredCards = sheetDBData.filter(card => {
+    // Vérifie chaque condition avec les bons noms de colonnes
+    const langueOk = card.langue && card.langue.trim() === window.selectedLang;
+    const themeOk = card.theme && window.selectedThemes.includes(card.theme.trim());
+    const francaisOk = card.fr && card.fr.trim();
+    const traductionOk = card[langKey] && card[langKey].trim();
+    
+    return langueOk && themeOk && francaisOk && traductionOk;
+  });
+  
+  console.log('Cartes filtrées:', filteredCards.length);
+  
+  // Mélange aléatoirement les cartes
+  const shuffledCards = [...filteredCards].sort(() => Math.random() - 0.5);
+  
+  // Prend le nombre de questions demandé
+  evaluationQuestions = shuffledCards.slice(0, window.selectedQuestionCount);
+  
+  // Stocke la clé de langue pour usage ultérieur
+  window.currentLangKey = langKey;
+  
+  // Initialise les variables d'évaluation
+  currentQuestionIndex = 0;
+  evaluationResults = [];
+  
+  console.log(`Évaluation préparée: ${evaluationQuestions.length} questions`);
 }
 
-// Fonction pour afficher la question suivante
-function showNextQuestion() {
-  currentQuestionIndex++;
-  if (currentQuestionIndex < questions.length) {
-    displayQuestion(questions[currentQuestionIndex]);
-    document.getElementById('feedback').innerHTML = '';
-    document.getElementById('nextBtn').style.display = 'none';
-    // ...autres réinitialisations si besoin...
-  } else {
-    showResults();
+function initEvaluationInterface() {
+  const parent = document.querySelector('.container');
+  
+  // Nettoie l'interface précédente
+  const existingEvalDiv = document.getElementById('evaluationInterface');
+  if (existingEvalDiv) existingEvalDiv.remove();
+  
+  // Crée l'interface d'évaluation
+  const evalDiv = document.createElement('div');
+  evalDiv.id = 'evaluationInterface';
+  evalDiv.innerHTML = `
+    <div id="progressBar" style="margin-bottom: 24px;">
+      <div style="font-size: 1.1em; margin-bottom: 8px; text-align: center;">
+        <span id="questionCounter">Question 1/${evaluationQuestions.length}</span>
+      </div>
+      <div style="background: #eee; border-radius: 10px; height: 8px; margin-bottom: 16px;">
+        <div id="progressFill" style="background: #4CAF50; height: 100%; border-radius: 10px; width: ${100/evaluationQuestions.length}%; transition: width 0.3s ease;"></div>
+      </div>
+    </div>
+    
+    <div id="questionCard" class="flashcard" style="margin-bottom: 24px; padding: 24px; background: #f8f9fa; border-radius: 12px; text-align: center;">
+      <div id="questionText" style="font-size: 1.4em; margin-bottom: 20px; color: #333;"></div>
+      <div id="questionContent"></div>
+    </div>
+    
+    <div id="answerSection" style="margin-bottom: 24px;"></div>
+    
+    <div id="feedbackSection" style="margin-bottom: 24px; min-height: 60px;"></div>
+    
+    <div id="navigationSection" style="text-align: center;">
+      <button id="validateBtn" class="main-btn" style="margin-right: 12px;">Valider</button>
+      <button id="nextQuestionBtn" class="main-btn" style="display: none;">Question suivante</button>
+      <button id="finishEvalBtn" class="main-btn" style="display: none;">Voir les résultats</button>
+    </div>
+    
+    <div style="text-align: center; margin-top: 20px; border-top: 2px solid rgba(102, 126, 234, 0.1); padding-top: 20px;">
+      <button id="cancelEvalBtn" class="nav-btn" 
+              style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: #dc2626; transition: all 0.3s ease;"
+              onmouseover="this.style.background='rgba(239, 68, 68, 0.2)'; this.style.borderColor='rgba(239, 68, 68, 0.5)'; this.style.transform='translateY(-1px)'"
+              onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'; this.style.borderColor='rgba(239, 68, 68, 0.3)'; this.style.transform='translateY(0)'">
+        ❌ Annuler l'évaluation
+      </button>
+    </div>
+  `;
+  
+  parent.appendChild(evalDiv);
+}
+
+function showQuestion(questionIndex) {
+  if (questionIndex >= evaluationQuestions.length) {
+    showEvaluationResults();
+    return;
+  }
+  
+  const question = evaluationQuestions[questionIndex];
+  currentQuestionIndex = questionIndex;
+  
+  // Met à jour le compteur et la barre de progression
+  document.getElementById('questionCounter').textContent = `Question ${questionIndex + 1}/${evaluationQuestions.length}`;
+  const progressPercent = ((questionIndex + 1) / evaluationQuestions.length) * 100;
+  document.getElementById('progressFill').style.width = `${progressPercent}%`;
+  
+  // Nettoie les sections précédentes
+  document.getElementById('answerSection').innerHTML = '';
+  document.getElementById('feedbackSection').innerHTML = '';
+  document.getElementById('validateBtn').style.display = '';
+  document.getElementById('nextQuestionBtn').style.display = 'none';
+  document.getElementById('finishEvalBtn').style.display = 'none';
+  
+  // Affiche la question selon le mode choisi
+  switch(window.selectedEvalMode) {
+    case 'qcm_fr_lang':
+      showQCMQuestion_FrenchToLang(question);
+      break;
+    case 'qcm_lang_fr':
+      showQCMQuestion_LangToFrench(question);
+      break;
+    case 'libre':
+      showFreeResponseQuestion(question);
+      break;
   }
 }
 
-// Gestionnaire du bouton "Carte suivante"
-document.getElementById('nextBtn').addEventListener('click', showNextQuestion);
+function showQCMQuestion_FrenchToLang(question) {
+  // Affiche le mot français
+  document.getElementById('questionText').textContent = `Quelle est la traduction de "${question.fr}" ?`;
+  
+  // Génère les choix multiples
+  const correctAnswer = question[window.currentLangKey];
+  const distractors = generateDistractors(question, window.currentLangKey, 3);
+  const choices = [correctAnswer, ...distractors].sort(() => Math.random() - 0.5);
+  
+  // Affiche les boutons de choix
+  const answerSection = document.getElementById('answerSection');
+  answerSection.innerHTML = '<div style="display: grid; gap: 12px; max-width: 400px; margin: 0 auto;"></div>';
+  const choicesContainer = answerSection.firstChild;
+  
+  choices.forEach((choice, index) => {
+    const button = document.createElement('button');
+    button.className = 'main-btn';
+    button.textContent = choice;
+    button.style.padding = '12px 20px';
+    button.style.textAlign = 'left';
+    button.onclick = function() {
+      selectChoice(button, choices, correctAnswer);
+    };
+    choicesContainer.appendChild(button);
+  });
+  
+  // Configure le bouton de validation
+  document.getElementById('validateBtn').onclick = function() {
+    const selectedBtn = document.querySelector('#answerSection .main-btn.selected');
+    if (!selectedBtn) {
+      alert('Veuillez sélectionner une réponse');
+      return;
+    }
+    validateAnswer(selectedBtn.textContent, correctAnswer, question);
+  };
+}
 
-// Ajouter un gestionnaire d'événement pour le bouton "Carte suivante"
-document.getElementById('nextBtn').addEventListener('click', function() {
-  // ...logique pour passer à la question suivante...
-  document.getElementById('nextBtn').style.display = 'none';
-  // ...afficher la prochaine question...
+function generateDistractors(currentQuestion, field, count) {
+  // Récupère toutes les valeurs possibles du champ (langKey ou 'fr')
+  const allValues = sheetDBData
+    .filter(card => 
+      card.langue === window.selectedLang && 
+      card[field] && 
+      card[field] !== currentQuestion[field]
+    )
+    .map(card => card[field])
+    .filter((value, index, arr) => arr.indexOf(value) === index); // Supprime les doublons
+  
+  // Mélange et prend le nombre demandé
+  const shuffled = allValues.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+function selectChoice(selectedButton, allChoices, correctAnswer) {
+  // Désélectionne tous les autres boutons
+  document.querySelectorAll('#answerSection .main-btn').forEach(btn => {
+    btn.classList.remove('selected');
+    btn.style.background = '';
+    btn.style.color = '';
+  });
+  
+  // Sélectionne le bouton cliqué
+  selectedButton.classList.add('selected');
+  selectedButton.style.background = '#007bff';
+  selectedButton.style.color = 'white';
+}
+
+function showQCMQuestion_LangToFrench(question) {
+  // Affiche le mot dans la langue étudiée
+  document.getElementById('questionText').textContent = `Quelle est la traduction française de "${question[window.currentLangKey]}" ?`;
+  
+  // Génère les choix multiples
+  const correctAnswer = question.fr;
+  const distractors = generateDistractors(question, 'fr', 3);
+  const choices = [correctAnswer, ...distractors].sort(() => Math.random() - 0.5);
+  
+  // Affiche les boutons de choix
+  const answerSection = document.getElementById('answerSection');
+  answerSection.innerHTML = '<div style="display: grid; gap: 12px; max-width: 400px; margin: 0 auto;"></div>';
+  const choicesContainer = answerSection.firstChild;
+  
+  choices.forEach((choice, index) => {
+    const button = document.createElement('button');
+    button.className = 'main-btn';
+    button.textContent = choice;
+    button.style.padding = '12px 20px';
+    button.style.textAlign = 'left';
+    button.onclick = function() {
+      selectChoice(button, choices, correctAnswer);
+    };
+    choicesContainer.appendChild(button);
+  });
+  
+  // Configure le bouton de validation
+  document.getElementById('validateBtn').onclick = function() {
+    const selectedBtn = document.querySelector('#answerSection .main-btn.selected');
+    if (!selectedBtn) {
+      alert('Veuillez sélectionner une réponse');
+      return;
+    }
+    validateAnswer(selectedBtn.textContent, correctAnswer, question);
+  };
+}
+
+function showFreeResponseQuestion(question) {
+  // Affiche le mot dans la langue étudiée
+  document.getElementById('questionText').textContent = `Traduisez en français : "${question[window.currentLangKey]}"`;
+  
+  // Affiche le champ de saisie
+  const answerSection = document.getElementById('answerSection');
+  answerSection.innerHTML = `
+    <div style="max-width: 400px; margin: 0 auto;">
+      <input type="text" id="freeResponseInput" class="form-input" 
+             placeholder="Votre réponse en français..." 
+             style="width: 100%; padding: 12px; font-size: 1.1em; text-align: center;">
+    </div>
+  `;
+  
+  // Focus sur le champ de saisie
+  document.getElementById('freeResponseInput').focus();
+  
+  // Validation avec Entrée
+  document.getElementById('freeResponseInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      document.getElementById('validateBtn').click();
+    }
+  });
+  
+  // Configure le bouton de validation
+  document.getElementById('validateBtn').onclick = function() {
+    const userAnswer = document.getElementById('freeResponseInput').value.trim();
+    if (!userAnswer) {
+      alert('Veuillez saisir une réponse');
+      return;
+    }
+    validateAnswer(userAnswer, question.fr, question);
+  };
+}
+
+function validateAnswer(userAnswer, correctAnswer, question) {
+  // Normalise les réponses pour la comparaison (réponse libre)
+  const normalizeText = (text) => {
+    return text.toLowerCase()
+      .trim()
+      .replace(/[.,;:!?]/g, '') // Supprime la ponctuation
+      .replace(/\s+/g, ' '); // Normalise les espaces
+  };
+  
+  let isCorrect;
+  if (window.selectedEvalMode === 'libre') {
+    // Pour la réponse libre, on accepte des variantes
+    const normalizedUser = normalizeText(userAnswer);
+    const normalizedCorrect = normalizeText(correctAnswer);
+    isCorrect = normalizedUser === normalizedCorrect;
+  } else {
+    // Pour les QCM, comparaison exacte
+    isCorrect = userAnswer === correctAnswer;
+  }
+  
+  // Stocke le résultat
+  evaluationResults.push({
+    question: question,
+    userAnswer: userAnswer,
+    correctAnswer: correctAnswer,
+    isCorrect: isCorrect,
+    mode: window.selectedEvalMode
+  });
+  
+  // Affiche le feedback
+  showFeedback(isCorrect, correctAnswer, question);
+  
+  // Masque le bouton "Valider" et affiche le bouton "Suivant"
+  document.getElementById('validateBtn').style.display = 'none';
+  
+  if (currentQuestionIndex < evaluationQuestions.length - 1) {
+    document.getElementById('nextQuestionBtn').style.display = '';
+  } else {
+    document.getElementById('finishEvalBtn').style.display = '';
+  }
+  
+  // Désactive les boutons de choix pour éviter les modifications
+  document.querySelectorAll('#answerSection .main-btn, #freeResponseInput').forEach(element => {
+    element.disabled = true;
+    if (element.tagName === 'BUTTON') {
+      element.style.opacity = '0.7';
+    }
+  });
+}
+
+function showFeedback(isCorrect, correctAnswer, question) {
+  const feedbackSection = document.getElementById('feedbackSection');
+  
+  if (isCorrect) {
+    feedbackSection.innerHTML = `
+      <div style="background: #d4edda; color: #155724; padding: 16px; border-radius: 8px; text-align: center;">
+        <div style="font-size: 1.2em; font-weight: bold; margin-bottom: 8px;">✅ Correct !</div>
+        <div>Bien joué ! "${correctAnswer}" est la bonne réponse.</div>
+      </div>
+    `;
+  } else {
+    feedbackSection.innerHTML = `
+      <div style="background: #f8d7da; color: #721c24; padding: 16px; border-radius: 8px; text-align: center;">
+        <div style="font-size: 1.2em; font-weight: bold; margin-bottom: 8px;">❌ Incorrect</div>
+        <div style="margin-bottom: 8px;">La bonne réponse était : <strong>"${correctAnswer}"</strong></div>
+        ${question.theme ? `<div style="font-size: 0.9em; opacity: 0.8;">Thème : ${question.theme}</div>` : ''}
+      </div>
+    `;
+  }
+}
+
+// Configuration des boutons de navigation
+document.addEventListener('DOMContentLoaded', function() {
+  // Délègue les événements car les boutons sont créés dynamiquement
+  document.addEventListener('click', function(e) {
+    if (e.target.id === 'nextQuestionBtn') {
+      showQuestion(currentQuestionIndex + 1);
+    } else if (e.target.id === 'finishEvalBtn') {
+      showEvaluationResults();
+    } else if (e.target.id === 'cancelEvalBtn') {
+      cancelEvaluation();
+    }
+  });
 });
 
-// Déclaration unique en haut du fichier :
-let questions = [];
+function showEvaluationResults() {
+  const parent = document.querySelector('.container');
+  
+  // Nettoie l'interface d'évaluation
+  const evalInterface = document.getElementById('evaluationInterface');
+  if (evalInterface) evalInterface.remove();
+  
+  // Calcule les statistiques
+  const totalQuestions = evaluationResults.length;
+  const correctAnswers = evaluationResults.filter(r => r.isCorrect).length;
+  const scorePercent = Math.round((correctAnswers / totalQuestions) * 100);
+  
+  // Crée l'écran de résultats
+  const resultsDiv = document.createElement('div');
+  resultsDiv.id = 'evaluationResults';
+  resultsDiv.style.maxWidth = '600px';
+  resultsDiv.style.margin = '0 auto';
+  
+  resultsDiv.innerHTML = `
+    <div style="text-align: center; margin-bottom: 32px;">
+      <h2 style="color: #333; margin-bottom: 16px;">📊 Résultats de l'évaluation</h2>
+      <div style="font-size: 2.5em; font-weight: bold; margin: 20px 0; color: ${scorePercent >= 70 ? '#28a745' : scorePercent >= 50 ? '#ffc107' : '#dc3545'};">
+        ${correctAnswers}/${totalQuestions}
+      </div>
+      <div style="font-size: 1.4em; margin-bottom: 8px;">Score : ${scorePercent}%</div>
+      <div style="font-size: 1.1em; color: #666;">
+        ${scorePercent >= 80 ? '🎉 Excellent travail !' : 
+          scorePercent >= 70 ? '👍 Bon travail !' : 
+          scorePercent >= 50 ? '👌 Pas mal, continuez à vous entraîner !' : 
+          '💪 Ne vous découragez pas, la pratique fait la perfection !'}
+      </div>
+    </div>
+    
+    ${evaluationResults.some(r => !r.isCorrect) ? `
+    <div style="margin-bottom: 32px;">
+      <h3 style="color: #dc3545; margin-bottom: 16px;">❌ Questions incorrectes</h3>
+      <div id="incorrectAnswers" style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
+        ${evaluationResults
+          .filter(r => !r.isCorrect)
+          .map((result, index) => `
+            <div style="margin-bottom: 16px; padding: 12px; background: white; border-radius: 8px; border-left: 4px solid #dc3545;">
+              <div style="font-weight: bold; margin-bottom: 4px;">
+                ${result.mode === 'qcm_fr_lang' ? 
+                  `"${result.question.fr}" → ${result.question[window.currentLangKey]}` :
+                  result.mode === 'qcm_lang_fr' ? 
+                  `"${result.question[window.currentLangKey]}" → ${result.question.fr}` :
+                  `"${result.question[window.currentLangKey]}" → ${result.question.fr}`
+                }
+              </div>
+              <div style="color: #dc3545; font-size: 0.9em;">
+                Votre réponse : "${result.userAnswer}"
+              </div>
+              <div style="color: #28a745; font-size: 0.9em;">
+                Bonne réponse : "${result.correctAnswer}"
+              </div>
+              ${result.question.theme ? `<div style="color: #666; font-size: 0.8em; margin-top: 4px;">Thème : ${result.question.theme}</div>` : ''}
+            </div>
+          `).join('')}
+      </div>
+    </div>
+    ` : ''}
+    
+    <div style="text-align: center;">
+      <button id="restartEvalBtn" class="main-btn" style="margin-right: 12px; background: #007bff;">
+        🔄 Recommencer avec les mêmes paramètres
+      </button>
+      <button id="newEvalBtn" class="main-btn" style="margin-right: 12px; background: #28a745;">
+        ⚙️ Nouvelle évaluation
+      </button>
+      <button id="backToMenuBtn" class="main-btn" style="background: #6c757d;">
+        🏠 Retour au menu
+      </button>
+    </div>
+  `;
+  
+  parent.appendChild(resultsDiv);
+  
+  // Configure les boutons
+  document.getElementById('restartEvalBtn').onclick = function() {
+    resultsDiv.remove();
+    startEvaluation();
+  };
+  
+  document.getElementById('newEvalBtn').onclick = function() {
+    resultsDiv.remove();
+    // Remet à zéro et recommence la sélection
+    window.selectedLang = null;
+    window.selectedEvalMode = null;
+    window.selectedThemes = null;
+    window.selectedQuestionCount = null;
+    location.reload();
+  };
+  
+  document.getElementById('backToMenuBtn').onclick = function() {
+    window.location.href = 'index.html';
+  };
+}
 
-
-// Ajoutez cette fonction pour le mode texte
-function selectTextAnswer(userInput, correct, input, submitBtn) {
-  // Normalisation pour comparaison (minuscule, trim)
-  const user = userInput.trim().toLowerCase();
-  const corr = correct.trim().toLowerCase();
-  let theme = null;
-  if (
-    cards[currentIndex] &&
-    typeof cards[currentIndex].theme === "string" &&
-    cards[currentIndex].theme.length > 0
-  ) {
-    theme = cards[currentIndex].theme;
-  } else if (
-    selectedThemes &&
-    selectedThemes.length === 1 &&
-    typeof selectedThemes[0] === "string" &&
-    selectedThemes[0].length > 0
-  ) {
-    theme = selectedThemes[0];
-  }
-  if (typeof theme === "string" && theme.length > 0) {
-    const scores = localStorage.getItem('themeScores');
-    let obj = scores ? JSON.parse(scores) : {};
-    const key = selectedLang + ':' + theme;
-    if (!obj[key] || !Array.isArray(obj[key].history)) {
-      obj[key] = { history: [] };
+function cancelEvaluation() {
+  // Demande confirmation avant d'annuler
+  const confirmCancel = confirm(
+    '⚠️ Êtes-vous sûr de vouloir annuler l\'évaluation ?\n\n' +
+    'Votre progression actuelle sera perdue.'
+  );
+  
+  if (confirmCancel) {
+    // Supprime l'interface d'évaluation
+    const evalInterface = document.getElementById('evaluationInterface');
+    if (evalInterface) {
+      evalInterface.remove();
     }
-    obj[key].history.push(user === corr ? 1 : 0);
-    if (obj[key].history.length > 20) obj[key].history = obj[key].history.slice(-20);
-    const sum = obj[key].history.reduce((a, b) => a + b, 0);
-    obj[key].score = Math.round((sum / obj[key].history.length) * 10);
-    localStorage.setItem('themeScores', JSON.stringify(obj));
-  }
-  if (user === corr) {
-    input.style.background = '#d1fae5'; // vert
-    feedbackDiv.textContent = 'Bonne réponse !';
-    score++;
-  } else {
-    input.style.background = '#fee2e2'; // rouge
-    feedbackDiv.innerHTML = `Mauvaise réponse.<br>La bonne réponse était : <b>${correct}</b>`;
-  }
-  nextBtn.style.display = '';
-}
-
-// =============================
-// 7. Sauvegarde et affichage des résultats
-// =============================
-function saveScoreToHistory(score, totalQuestions, mode, lang) {
-  const history = JSON.parse(localStorage.getItem('scoreHistory')) || [];
-  history.push({
-    date: new Date().toLocaleString(),
-    mode: mode,
-    lang: lang,
-    score: score,
-    total: totalQuestions
-  });
-  localStorage.setItem('scoreHistory', JSON.stringify(history));
-}
-
-function afficherResultat() {
-  let score = 0;
-  if (currentMode === 'qcm') score = scoreQCM;
-  else if (currentMode === 'qcm_fr_en') score = scoreQCMFrEn;
-  else if (currentMode === 'libre') score = scoreLibre;
-  document.getElementById('feedback').innerHTML = `Votre score : <b>${score}</b> / ${totalQuestions}`;
-  // Récupération cohérente de la langue sélectionnée
-  let selectedLang = 'all';
-  const langSelect = document.getElementById('langSelect');
-  if (langSelect && langSelect.querySelector('select')) {
-    selectedLang = langSelect.querySelector('select').value;
-  }
-  saveScoreToHistory(score, totalQuestions, currentMode, selectedLang);
-}
-
-// Variables globales
-
-let currentQuestionIndex = 0;
-let evaluationMode = 'qcm';
-
-// Initialisation de l'évaluation
-function startEvaluation() {
-  // ...récupération des thèmes et du mode...
-  questions = getSelectedQuestions(); // À adapter selon votre logique
-  currentQuestionIndex = 0;
-  score = 0;
-  document.getElementById('flashcardSection').style.display = 'block';
-  document.getElementById('nextBtn').style.display = 'none';
-  showQuestion();
-}
-
-// Affiche la question courante
-function showQuestion() {
-  const q = questions[currentQuestionIndex];
-  // ...affichage du contenu de la carte selon le mode...
-  document.getElementById('feedback').innerHTML = '';
-  document.getElementById('answers').innerHTML = '';
-  document.getElementById('nextBtn').style.display = 'none';
-  // ...génération des réponses (QCM ou libre)...
-}
-
-// Validation de la réponse
-function validateAnswer(userAnswer) {
-  const q = questions[currentQuestionIndex];
-  let isCorrect = false;
-  // ...logique de validation selon le mode...
-  if (isCorrect) score++;
-  document.getElementById('feedback').innerHTML = isCorrect ? "Bonne réponse !" : "Mauvaise réponse.";
-  document.getElementById('nextBtn').style.display = 'block';
-  // ...désactive les boutons de réponse si besoin...
-}
-
-// Passage à la question suivante
-function showNextQuestion() {
-  currentQuestionIndex++;
-  if (currentQuestionIndex < questions.length) {
-    showQuestion();
-  } else {
-    showResults();
-  }
-}
-
-// Affichage des résultats
-function showResults() {
-  document.getElementById('flashcardSection').style.display = 'none';
-  // ...affichage du score et des corrections...
-}
-
-// Gestionnaires d'événements
-document.getElementById('startBtn').addEventListener('click', startEvaluation);
-document.getElementById('nextBtn').addEventListener('click', showNextQuestion);
-// ...ajoutez les gestionnaires pour les réponses selon le mode...
-
-// Ajoutez cette fonction utilitaire avant startEvaluation :
-function getSelectedQuestions() {
-  let selected = [];
-  if (!selectedLang || !selectedThemes || !selectedThemes.length) return selected;
-  selectedThemes.forEach(theme => {
-    if (dataByLang[selectedLang][theme]) {
-      selected = selected.concat(dataByLang[selectedLang][theme]);
+    
+    // Réaffiche le bouton "Retour" du HTML s'il était masqué
+    const htmlReturnBtn = document.querySelector('button[onclick*="index.html"]');
+    if (htmlReturnBtn) {
+      htmlReturnBtn.style.display = '';
     }
-  });
-  let langKey = selectedLang === 'anglais' ? 'en' : (selectedLang === 'japonais' ? 'ja' : selectedLang);
-  selected = selected.map(card => ({
-    question: card[langKey],
-    answer: card.fr,
-    theme: card.theme
-  }));
-  shuffle(selected);
-  // Limite au nombre de questions demandé
-  const maxQuestions = parseInt(document.getElementById('questionCount').value) || 1;
-  return selected.slice(0, maxQuestions);
+    
+    // Remet à zéro les variables globales
+    evaluationQuestions = [];
+    currentQuestionIndex = 0;
+    evaluationResults = [];
+    window.selectedLang = null;
+    window.selectedEvalMode = null;
+    window.selectedThemes = null;
+    window.selectedQuestionCount = null;
+    window.currentLangKey = null;
+    
+    // Recharge la page pour revenir à l'état initial
+    location.reload();
+  }
 }
 
-// ...existing code...
-// Tout le code de la partie évaluation est mis en commentaire pour ne plus être utilisé
-// ...existing code...
-*/
+
 

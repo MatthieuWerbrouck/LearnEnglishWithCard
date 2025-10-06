@@ -3,48 +3,54 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ajouter un thème ou une carte</title>
+  <title>✏️ Ajouter des cartes - Polyglot Flashcards</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
-    <h2>Ajouter un thème ou une carte</h2>
-    <form id="addCardForm" style="max-width:400px;margin:0 auto;text-align:left;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <h1 style="font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 8px;">
+        ✏️ Ajouter des cartes
+      </h1>
+      <p style="color: #6b7280; font-size: 1rem;">Enrichis ta collection de vocabulaire</p>
+    </div>
+
+    <form id="addCardForm" style="text-align: left;">
       <div class="form-group">
-        <label for="themeSelect">Thème :</label>
-        <select id="themeSelect" class="form-input"></select>
-        <input type="text" id="newTheme" class="form-input" placeholder="Ou nouveau thème" />
+        <label for="themeSelect">🎯 Sélectionner un thème</label>
+        <select id="themeSelect" class="form-input" style="appearance: none; background-image: url('data:image/svg+xml;utf8,<svg fill=\"%23667eea\" height=\"24\" viewBox=\"0 0 24 24\" width=\"24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 10l5 5 5-5z\"/></svg>'); background-repeat: no-repeat; background-position: right 16px center; background-size: 16px; padding-right: 48px;"></select>
       </div>
+      
       <div class="form-group">
-        <label for="enWord">Mot anglais :</label>
-        <input type="text" id="enWord" class="form-input" required />
+        <label for="newTheme">🆕 Ou créer un nouveau thème</label>
+        <input type="text" id="newTheme" class="form-input" placeholder="Ex: Sports, Cuisine, Voyages..." />
       </div>
-      <div class="form-group">
-        <label for="frWord">Traduction française :</label>
-        <input type="text" id="frWord" class="form-input" required />
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="enWord">🇬🇧 Mot anglais</label>
+          <input type="text" id="enWord" class="form-input" required placeholder="Ex: apple" />
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="frWord">🇫🇷 Traduction française</label>
+          <input type="text" id="frWord" class="form-input" required placeholder="Ex: pomme" />
+        </div>
       </div>
-      <button type="submit" class="main-btn" style="width:100%;margin-top:18px;">Ajouter la carte</button>
+      
+      <button type="submit" class="main-btn" style="width: 100%; margin-bottom: 16px;">
+        ➕ Ajouter la carte
+      </button>
     </form>
-    <div id="addMsg" style="margin-top:18px;"></div>
-    <button class="nav-btn" onclick="window.location.href='index.html'">Retour</button>
+    
+    <div id="addMsg" style="margin: 20px 0; padding: 16px; border-radius: 12px; text-align: center; font-weight: 500; display: none;"></div>
+    
+    <div style="text-align: center;">
+      <button class="nav-btn" onclick="window.location.href='index.html'">
+        🏠 Retour à l'accueil
+      </button>
+    </div>
   </div>
   <script src="ajout.js"></script>
 </body>
-<!-- Bandeau défilant warning -->
-<div style="
-  position:fixed;
-  left:0;right:0;bottom:0;
-  background:#ffc107;
-  color:#333;
-  font-weight:bold;
-  font-size:1em;
-  padding:8px 0;
-  z-index:9999;
-  text-align:center;
-  overflow:hidden;
-">
-  <marquee behavior="scroll" direction="left" scrollamount="5">
-    ⚠️ Travaux en cours sur la partie évaluation
-  </marquee>
-</div>
 </html>

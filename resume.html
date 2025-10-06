@@ -3,31 +3,75 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Résumé des notes</title>
+  <title>📊 Résumé des progrès - Polyglot Flashcards</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <style>
+    .score-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(102, 126, 234, 0.1);
+    }
+    .score-table th {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 16px 12px;
+      font-weight: 600;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    .score-table td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+      font-size: 0.9rem;
+    }
+    .score-table tr:hover {
+      background: rgba(102, 126, 234, 0.05);
+    }
+    .score-table tr:last-child td {
+      border-bottom: none;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
-    <h1>Résumé de l'apprentissage</h1>
-    <div style="margin-bottom:18px;">
-      <label for="modeFilter">Filtrer par mode :</label>
-      <select id="modeFilter" class="form-input">
-        <option value="all">Tous</option>
-        <option value="qcm">QCM (mot anglais, choix français)</option>
-        <option value="qcm_fr_en">QCM (mot français, choix anglais)</option>
-        <option value="libre">Réponse libre</option>
-      </select>
+    <div style="text-align: center; margin-bottom: 32px;">
+      <h1 style="font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 8px;">
+        📊 Résumé des progrès
+      </h1>
+      <p style="color: #6b7280; font-size: 1rem;">Suivi de tes performances et statistiques</p>
     </div>
-    <div style="margin-bottom:18px;">
-      <label for="langFilter">Filtrer par langue :</label>
-      <select id="langFilter" class="form-input">
-        <option value="all">Toutes</option>
-        <option value="anglais">Anglais</option>
-        <option value="francais">Français</option>
-      </select>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+      <div class="form-group" style="margin-bottom: 0;">
+        <label for="modeFilter">🎯 Filtrer par mode</label>
+        <select id="modeFilter" class="form-input">
+          <option value="all">Tous les modes</option>
+          <option value="qcm">QCM (mot anglais, choix français)</option>
+          <option value="qcm_fr_en">QCM (mot français, choix anglais)</option>
+          <option value="libre">Réponse libre</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label for="langFilter">🌍 Filtrer par langue</label>
+        <select id="langFilter" class="form-input">
+          <option value="all">Toutes les langues</option>
+          <option value="anglais">Anglais</option>
+          <option value="francais">Français</option>
+        </select>
+      </div>
     </div>
+
     <div id="scoreHistory"></div>
-    <button onclick="window.location.href='index.html'" class="main-btn" style="margin-top:32px;">Retour</button>
+    
+    <div style="text-align: center; margin-top: 32px;">
+      <button onclick="window.location.href='index.html'" class="nav-btn">🏠 Retour à l'accueil</button>
+    </div>
   </div>
   <script>
     function getHistory() {

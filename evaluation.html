@@ -3,12 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Évaluation aléatoire</title>
+  <title>🎯 Évaluation interactive - Polyglot Flashcards</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
-    <h1 style="margin-bottom:24px;">Évaluation par thème(s)</h1>
+    <div style="text-align: center; margin-bottom: 32px;">
+      <h1 style="font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 8px;">
+        🎯 Évaluation interactive
+      </h1>
+      <p style="color: #6b7280; font-size: 1rem;">Configure ton test personnalisé et mesure tes progrès</p>
+    </div>
     <div id="langSelect" style="margin-bottom:24px;"></div>
     <div id="modeSelectDiv" class="form-group" style="margin-bottom:18px;display:none;">
       <label for="modeSelect">Mode d'évaluation :</label>
@@ -33,7 +39,9 @@
       <div id="feedback" class="feedback" style="margin-top:16px;"></div>
       <button id="nextBtn" class="main-btn" style="display:none;margin-top:24px;">Carte suivante</button>
     </div>
-    <button onclick="window.location.href='index.html'" class="main-btn" style="margin-top:32px;">Retour</button>
+    <div style="text-align: center; margin-top: 32px;">
+      <button onclick="window.location.href='index.html'" class="nav-btn">🏠 Retour à l'accueil</button>
+    </div>
   </div>
   <script src="evaluation.js"></script>
 </body>

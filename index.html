@@ -9,36 +9,69 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container" style="max-width:420px;margin:48px auto 0 auto;padding:32px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 24px rgba(45,108,223,0.10);text-align:center;">
-  <h1 style="margin-bottom:32px;font-family:'Inter',sans-serif;font-weight:600;color:#2d6cdf;">Polyglot Flashcards</h1>
-  <p style="margin-bottom:24px;color:#444;font-size:1.1rem;">Apprends et révise l'anglais, le japonais et plus par thèmes</p>
-    <div class="menu" style="display:flex;flex-direction:column;gap:18px;align-items:center;">
-      <button class="main-btn" onclick="window.location.href='revision.html'">Révision par thème</button>
-      <button class="main-btn" style="background:#ccc;color:#888;cursor:not-allowed;" disabled>Évaluation</button>
-      <button class="main-btn" id="refreshBtn" style="margin-top:12px">Actualiser les cartes</button>
-      <button onclick="window.location.href='resume.html'" class="main-btn" style="margin-top:18px;">Résumé des notes</button>
+  <div class="container">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <h1 style="margin-bottom: 16px; font-size: 2.5rem; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+        ✨ Polyglot Flashcards
+      </h1>
+      <p style="color: #6b7280; font-size: 1.2rem; font-weight: 400; line-height: 1.6;">
+        Apprends et maîtrise les langues<br>
+        <strong style="color: #374151;">par thèmes interactifs</strong>
+      </p>
     </div>
+    
+    <div class="menu" style="display: flex; flex-direction: column; gap: 16px; align-items: center;">
+      <button class="main-btn" onclick="window.location.href='revision.html'">
+        📚 Révision par thème
+      </button>
+      <button class="main-btn" onclick="window.location.href='evaluation.html'">
+        🎯 Évaluation interactive
+      </button>
+      <button class="main-btn" id="refreshBtn">
+        🔄 Actualiser les cartes
+      </button>
+      <button class="main-btn" onclick="window.location.href='resume.html'">
+        📊 Résumé des notes
+      </button>
+    </div>
+    <div style="margin-top: 40px; padding: 20px; background: rgba(102, 126, 234, 0.05); border-radius: 16px; border: 1px solid rgba(102, 126, 234, 0.1);">
+      <h3 style="margin-bottom: 12px; color: #374151; font-size: 1.1rem;">🌟 Fonctionnalités</h3>
+      <ul style="text-align: left; color: #6b7280; line-height: 1.8; padding-left: 20px;">
+        <li><strong>Révision intelligente</strong> - Cartes interactives par thèmes</li>
+        <li><strong>Évaluation complète</strong> - QCM et réponses libres</li>
+        <li><strong>Suivi des progrès</strong> - Notes et statistiques détaillées</li>
+        <li><strong>Multi-langues</strong> - Anglais, japonais et plus...</li>
+      </ul>
+    </div>
+    
     <script>
       document.getElementById('refreshBtn').onclick = function() {
-        localStorage.setItem('refreshCards', '1');
-        alert('Les cartes seront actualisées lors du prochain affichage !');
+        // Vide le cache SheetDB
+        localStorage.removeItem('sheetDB_cache');
+        localStorage.removeItem('sheetDB_cache_timestamp');
+        
+        // Vide le cache en mémoire
+        if (window.sheetDBData) {
+          window.sheetDBData = null;
+        }
+        if (window.sheetDBPromise) {
+          window.sheetDBPromise = null;
+        }
+        
+        // Feedback visuel
+        const btn = document.getElementById('refreshBtn');
+        const originalText = btn.textContent;
+        btn.textContent = '✅ Cache vidé !';
+        btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+        
+        console.log('🗑️ Cache SheetDB vidé - prochaine visite rechargera les données');
+        
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = '';
+        }, 2500);
       };
     </script>
-  </div>
-  <!-- Bandeau warning -->
-  <div style="
-    position:fixed;
-    left:0;right:0;bottom:0;
-    background:#ffc107;
-    color:#333;
-    font-weight:bold;
-    font-size:1em;
-    padding:8px 0;
-    z-index:9999;
-    text-align:center;
-    overflow:hidden;
-  ">
-    ⚠️ Travaux en cours sur la partie évaluation
   </div>
 </body>
 </html>

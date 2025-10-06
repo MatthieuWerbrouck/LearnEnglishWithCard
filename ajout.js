@@ -48,16 +48,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const newTheme = document.getElementById('newTheme').value.trim();
     const en = document.getElementById('enWord').value.trim();
     const fr = document.getElementById('frWord').value.trim();
+    
     if (newTheme) theme = newTheme;
+    
     if (!theme || !en || !fr) {
-      addMsg.textContent = 'Veuillez remplir tous les champs.';
+      showMessage('⚠️ Veuillez remplir tous les champs requis.', 'error');
       return;
     }
+    
     if (!themes[theme]) themes[theme] = [];
     themes[theme].push({ en, fr });
     saveThemes(themes);
     updateThemeSelect();
     form.reset();
-    addMsg.textContent = `Carte ajoutée au thème "${theme}" !`;
+    
+    showMessage(`✅ Carte "${en} → ${fr}" ajoutée au thème "${theme}" !`, 'success');
   };
+
+  function showMessage(text, type) {
+    const addMsg = document.getElementById('addMsg');
+    addMsg.textContent = text;
+    addMsg.style.display = 'block';
+    
+    if (type === 'success') {
+      addMsg.style.background = 'rgba(16, 185, 129, 0.1)';
+      addMsg.style.border = '2px solid rgba(16, 185, 129, 0.3)';
+      addMsg.style.color = '#065f46';
+    } else if (type === 'error') {
+      addMsg.style.background = 'rgba(239, 68, 68, 0.1)';
+      addMsg.style.border = '2px solid rgba(239, 68, 68, 0.3)';
+      addMsg.style.color = '#991b1b';
+    }
+    
+    setTimeout(() => {
+      addMsg.style.display = 'none';
+    }, 4000);
+  }
 });
