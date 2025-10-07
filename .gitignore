@@ -2,3 +2,4 @@ AUDIT-REPORT.md
 syntax_check.ps1
 evaluation.js.backup
 syntax_check.js
+analyze-braces.ps1
