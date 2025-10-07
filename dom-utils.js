@@ -9,7 +9,12 @@ function safeQuery(selector, context = document) {
   try {
     const element = context.querySelector(selector);
     if (!element) {
-      console.warn(`Element not found: ${selector}`);
+      // Moins verbeux pour certains éléments d'interface attendus
+      if (selector === '#evaluationInterface') {
+        console.debug(`Interface element not found: ${selector} (this may be normal during transitions)`);
+      } else {
+        console.warn(`Element not found: ${selector}`);
+      }
       return null;
     }
     return element;

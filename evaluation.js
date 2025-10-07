@@ -977,6 +977,11 @@ function initEvaluationInterface() {
   
   cancelDiv.appendChild(cancelBtn);
   
+  // Event listener direct pour le bouton d'annulation
+  cancelBtn.onclick = function() {
+    cancelEvaluation();
+  };
+  
   evalDiv.appendChild(questionCard);
   evalDiv.appendChild(answerSection);
   evalDiv.appendChild(feedbackSection);
@@ -984,6 +989,297 @@ function initEvaluationInterface() {
   evalDiv.appendChild(cancelDiv);
   
   parent.appendChild(evalDiv);
+}
+
+function showFeedback(isCorrect, correctAnswer, question) {
+  const feedbackSection = document.getElementById('feedbackSection');
+  
+  if (isCorrect) {
+    feedbackSection.innerHTML = `
+      <div style="background: #d4edda; color: #155724; padding: 16px; border-radius: 8px; text-align: center;">
+        <div style="font-size: 1.2em; font-weight: bold; margin-bottom: 8px;">✅ Correct !</div>
+        <div>Bien joué ! "${correctAnswer}" est la bonne réponse.</div>
+      </div>
+    `;
+  } else {
+    feedbackSection.innerHTML = `
+      <div style="background: #f8d7da; color: #721c24; padding: 16px; border-radius: 8px; text-align: center;">
+        <div style="font-size: 1.2em; font-weight: bold; margin-bottom: 8px;">❌ Incorrect</div>
+        <div style="margin-bottom: 8px;">La bonne réponse était : <strong>"${correctAnswer}"</strong></div>
+        ${question.theme ? `<div style="font-size: 0.9em; opacity: 0.8;">Thème : ${question.theme}</div>` : ''}
+      </div>
+    `;
+  }
+}
+
+function validateAnswer(userAnswer, correctAnswer, question) {
+  // Normalise les réponses pour la comparaison (réponse libre)
+  const normalizeText = (text) => {
+    return text.toLowerCase()
+      .trim()
+      .replace(/[.,;:!?]/g, '') // Supprime la ponctuation
+      .replace(/\s+/g, ' '); // Normalise les espaces
+  };
+  
+  let isCorrect;
+  if (window.selectedEvalMode === 'libre') {
+    // Pour la réponse libre, on accepte des variantes
+    const normalizedUser = normalizeText(userAnswer);
+    const normalizedCorrect = normalizeText(correctAnswer);
+    isCorrect = normalizedUser === normalizedCorrect;
+  } else {
+    // Pour les QCM, comparaison exacte
+    isCorrect = userAnswer === correctAnswer;
+  }
+  
+  // Calcule le temps de réponse
+  const responseTime = questionStartTime ? Date.now() - questionStartTime : null;
+  
+  // Stocke le résultat
+  evaluationResults.push({
+    question: question,
+    userAnswer: userAnswer,
+    correctAnswer: correctAnswer,
+    isCorrect: isCorrect,
+    mode: window.selectedEvalMode,
+    responseTime: responseTime
+  });
+  
+  // Affiche le feedback
+  showFeedback(isCorrect, correctAnswer, question);
+  
+  // Masque le bouton "Valider" et affiche le bouton "Suivant" (sécurisé)
+  const validateBtn = DOMUtils.safeQuery('#validateBtn');
+  if (validateBtn) validateBtn.style.display = 'none';
+  
+  if (currentQuestionIndex < evaluationQuestions.length - 1) {
+    const nextBtn = DOMUtils.safeQuery('#nextQuestionBtn');
+    if (nextBtn) {
+      nextBtn.style.display = '';
+      // Event listener direct pour la navigation
+      nextBtn.onclick = function() {
+        showQuestion(currentQuestionIndex + 1);
+      };
+    }
+  } else {
+    const finishBtn = DOMUtils.safeQuery('#finishEvalBtn');
+    if (finishBtn) {
+      finishBtn.style.display = '';
+      // Event listener direct pour les résultats
+      finishBtn.onclick = function() {
+        showEvaluationResults();
+      };
+    }
+  }
+  
+  // Désactive les boutons de choix pour éviter les modifications (sécurisé)
+  document.querySelectorAll('#answerSection .main-btn, #freeResponseInput').forEach(element => {
+    element.disabled = true;
+    if (element.tagName === 'BUTTON') {
+      element.style.opacity = '0.7';
+    }
+  });
+}
+
+function showEvaluationResults() {
+  console.log('🎯 [Evaluation] Affichage des résultats commencé');
+  
+  try {
+    const parent = DOMUtils.safeQuery('.container');
+    if (!parent) {
+      console.error('❌ [Evaluation] Conteneur parent non trouvé');
+      return;
+    }
+    
+    // Nettoie l'interface d'évaluation
+    const evalInterface = DOMUtils.safeQuery('#evaluationInterface');
+    if (evalInterface && evalInterface.parentNode) {
+      evalInterface.remove();
+    }
+    
+    // Vérifie que nous avons des résultats
+    if (!evaluationResults || evaluationResults.length === 0) {
+      console.error('❌ [Evaluation] Aucun résultat d\'évaluation trouvé');
+      return;
+    }
+    
+    console.log(`📊 [Evaluation] Traitement de ${evaluationResults.length} résultats`);
+    
+    // Calcule les statistiques avancées
+    const totalQuestions = evaluationResults.length;
+    const correctAnswers = evaluationResults.filter(r => r.isCorrect).length;
+    const scorePercent = Math.round((correctAnswers / totalQuestions) * 100);
+    
+    console.log(`📈 [Evaluation] Score calculé: ${correctAnswers}/${totalQuestions} (${scorePercent}%)`);
+    
+    // Calcule le score pondéré
+    const advancedScore = calculateAdvancedScore(evaluationResults, window.selectedEvalMode);
+    console.log('⚖️ [Evaluation] Score pondéré calculé:', advancedScore);
+    
+    // Synchronise avec les scores de révision
+    syncWithRevisionScores(evaluationResults, window.selectedLang);
+  
+    // Calcule d'abord le breakdown par thème
+    const themeBreakdown = calculateThemeBreakdown(evaluationResults);
+    
+    // Prépare les données de session pour sauvegarde
+    const sessionData = {
+      language: window.selectedLang,
+      mode: window.selectedEvalMode,
+      themes: window.selectedThemes,
+      totalQuestions: totalQuestions,
+      correctAnswers: correctAnswers,
+      score: correctAnswers,
+      percentage: scorePercent,
+      weightedPercentage: advancedScore.weightedPercentage,
+      difficultyFactor: advancedScore.difficultyFactor,
+      results: evaluationResults,
+      duration: evaluationStartTime ? Math.round((Date.now() - evaluationStartTime) / 1000) : null,
+      averageResponseTime: evaluationResults.reduce((sum, r) => sum + (r.responseTime || 0), 0) / evaluationResults.length,
+      themeBreakdown: themeBreakdown
+    };
+    
+    // Sauvegarde la session
+    const sessionId = saveEvaluationSession(sessionData);
+    console.log(`💾 [Evaluation] Session sauvegardée avec ID: ${sessionId}`);
+    
+    // Crée l'écran de résultats
+    const resultsDiv = document.createElement('div');
+    resultsDiv.id = 'evaluationResults';
+    resultsDiv.style.maxWidth = '600px';
+    resultsDiv.style.margin = '0 auto';
+    
+    resultsDiv.innerHTML = `
+      <div style="text-align: center; margin-bottom: 32px;">
+        <h2 style="color: #333; margin-bottom: 24px;">📊 Résultats de l'évaluation</h2>
+        
+        <!-- Score principal -->
+        <div style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); padding: 24px; border-radius: 16px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+          <div style="font-size: 3em; font-weight: bold; margin: 16px 0; color: ${scorePercent >= 70 ? '#28a745' : scorePercent >= 50 ? '#ffc107' : '#dc3545'};">
+            ${correctAnswers}/${totalQuestions}
+          </div>
+          <div style="font-size: 1.6em; margin-bottom: 12px; color: #333;">Score : ${scorePercent}%</div>
+          
+          <!-- Score pondéré -->
+          ${advancedScore.weightedPercentage !== scorePercent ? `
+          <div style="font-size: 1.2em; margin-bottom: 12px; color: #666; padding: 8px; background: rgba(102, 126, 234, 0.1); border-radius: 8px;">
+            📈 Score pondéré : ${advancedScore.weightedPercentage}%
+            <div style="font-size: 0.8em; margin-top: 4px;">
+              (Difficulté ${advancedScore.difficultyFactor}x - Mode ${window.selectedEvalMode === 'libre' ? 'Réponse libre' : 'QCM'})
+            </div>
+          </div>
+          ` : ''}
+          
+          <div style="font-size: 1.1em; color: #666; margin-top: 16px;">
+            ${scorePercent >= 80 ? '🎉 Excellent travail ! Maîtrise parfaite !' : 
+              scorePercent >= 70 ? '👍 Très bon travail ! Continuez ainsi !' : 
+              scorePercent >= 50 ? '👌 Bon début, continuez à vous entraîner !' : 
+              '💪 Ne vous découragez pas, chaque évaluation est un progrès !'}
+          </div>
+        </div>
+        
+        <!-- Analytics par thème -->
+        ${Object.keys(themeBreakdown).length > 1 ? `
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 24px; text-align: left;">
+          <h4 style="color: #333; margin-bottom: 16px; text-align: center;">📚 Performance par thème</h4>
+          <div style="display: grid; gap: 12px; max-width: 500px; margin: 0 auto;">
+            ${Object.entries(themeBreakdown).map(([theme, data]) => `
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: 8px; border-left: 4px solid ${data.percentage >= 70 ? '#28a745' : data.percentage >= 50 ? '#ffc107' : '#dc3545'};">
+                <span style="font-weight: 500;">${theme}</span>
+                <span style="color: ${data.percentage >= 70 ? '#28a745' : data.percentage >= 50 ? '#ffc107' : '#dc3545'}; font-weight: bold;">
+                  ${data.correct}/${data.total} (${data.percentage}%)
+                </span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        ` : ''}
+      </div>
+      
+      ${evaluationResults.some(r => !r.isCorrect) ? `
+      <div style="margin-bottom: 32px;">
+        <h3 style="color: #dc3545; margin-bottom: 16px;">❌ Questions incorrectes</h3>
+        <div id="incorrectAnswers" style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
+          ${evaluationResults
+            .filter(r => !r.isCorrect)
+            .map((result, index) => `
+              <div style="margin-bottom: 16px; padding: 12px; background: white; border-radius: 8px; border-left: 4px solid #dc3545;">
+                <div style="font-weight: bold; margin-bottom: 4px;">
+                  ${result.mode === 'qcm_fr_lang' ? 
+                    `"${result.question.fr}" → ${result.question[window.currentLangKey]}` :
+                    result.mode === 'qcm_lang_fr' ? 
+                    `"${result.question[window.currentLangKey]}" → ${result.question.fr}` :
+                    `"${result.question[window.currentLangKey]}" → ${result.question.fr}`
+                  }
+                </div>
+                <div style="color: #dc3545; font-size: 0.9em;">
+                  Votre réponse : "${result.userAnswer}"
+                </div>
+                <div style="color: #28a745; font-size: 0.9em;">
+                  Bonne réponse : "${result.correctAnswer}"
+                </div>
+                ${result.question.theme ? `<div style="color: #666; font-size: 0.8em; margin-top: 4px;">Thème : ${result.question.theme}</div>` : ''}
+              </div>
+            `).join('')}
+        </div>
+      </div>
+      ` : ''}
+      
+      <div style="text-align: center;">
+        <button id="restartEvalBtn" class="main-btn" style="margin-right: 12px; background: #007bff;">
+          🔄 Recommencer avec les mêmes paramètres
+        </button>
+        <button id="newEvalBtn" class="main-btn" style="margin-right: 12px; background: #28a745;">
+          ⚙️ Nouvelle évaluation
+        </button>
+        <button id="backToMenuBtn" class="main-btn" style="background: #6c757d;">
+          🏠 Retour au menu
+        </button>
+      </div>
+    `;
+    
+    parent.appendChild(resultsDiv);
+    
+    // Configure les boutons
+    document.getElementById('restartEvalBtn').onclick = function() {
+      resultsDiv.remove();
+      startEvaluation();
+    };
+    
+    document.getElementById('newEvalBtn').onclick = function() {
+      resultsDiv.remove();
+      // Remet à zéro et recommence la sélection
+      window.selectedLang = null;
+      window.selectedEvalMode = null;
+      window.selectedThemes = null;
+      window.selectedQuestionCount = null;
+      location.reload();
+    };
+    
+    document.getElementById('backToMenuBtn').onclick = function() {
+      window.location.href = 'index.html';
+    };
+    
+    console.log('✅ [Evaluation] Résultats affichés avec succès');
+    
+  } catch (error) {
+    console.error('❌ [Evaluation] Erreur lors de l\'affichage des résultats:', error);
+    
+    // Affichage d'urgence simple
+    const parent = document.querySelector('.container');
+    if (parent) {
+      parent.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+          <h2 style="color: #dc3545;">❌ Erreur d'affichage</h2>
+          <p>Une erreur s'est produite lors de l'affichage des résultats.</p>
+          <p><strong>Score:</strong> ${evaluationResults ? evaluationResults.filter(r => r.isCorrect).length : 0}/${evaluationResults ? evaluationResults.length : 0}</p>
+          <button class="main-btn" onclick="window.location.href='index.html'" style="margin-top: 20px;">
+            🏠 Retour à l'accueil
+          </button>
+        </div>
+      `;
+    }
+  }
 }
 
 function showQuestion(questionIndex) {
@@ -999,19 +1295,29 @@ function showQuestion(questionIndex) {
   currentQuestionIndex = questionIndex;
   
   // Met à jour le compteur et la barre de progression
-  document.getElementById('questionCounter').textContent = `Question ${questionIndex + 1}/${evaluationQuestions.length}`;
+  const questionCounter = DOMUtils.safeQuery('#questionCounter');
+  if (questionCounter) {
+    questionCounter.textContent = `Question ${questionIndex + 1}/${evaluationQuestions.length}`;
+  }
   const progressPercent = ((questionIndex + 1) / evaluationQuestions.length) * 100;
-  document.getElementById('progressFill').style.width = `${progressPercent}%`;
+  const progressFill = DOMUtils.safeQuery('#progressFill');
+  if (progressFill) {
+    progressFill.style.width = `${progressPercent}%`;
+  }
   
   // Nettoie les sections précédentes
   // Sécurisation: Utilise un nettoyage sécurisé
-  const answerSection = document.getElementById('answerSection');
-  const feedbackSection = document.getElementById('feedbackSection');
+  const answerSection = DOMUtils.safeQuery('#answerSection');
+  const feedbackSection = DOMUtils.safeQuery('#feedbackSection');
   if (answerSection) answerSection.innerHTML = '';
   if (feedbackSection) feedbackSection.innerHTML = '';
-  document.getElementById('validateBtn').style.display = '';
-  document.getElementById('nextQuestionBtn').style.display = 'none';
-  document.getElementById('finishEvalBtn').style.display = 'none';
+  
+  const validateBtn = DOMUtils.safeQuery('#validateBtn');
+  const nextQuestionBtn = DOMUtils.safeQuery('#nextQuestionBtn');
+  const finishEvalBtn = DOMUtils.safeQuery('#finishEvalBtn');
+  if (validateBtn) validateBtn.style.display = '';
+  if (nextQuestionBtn) nextQuestionBtn.style.display = 'none';
+  if (finishEvalBtn) finishEvalBtn.style.display = 'none';
   
   // Affiche la question selon le mode choisi
   switch(window.selectedEvalMode) {
@@ -1192,298 +1498,14 @@ function showFreeResponseQuestion(question) {
   };
 }
 
-function validateAnswer(userAnswer, correctAnswer, question) {
-  // Normalise les réponses pour la comparaison (réponse libre)
-  const normalizeText = (text) => {
-    return text.toLowerCase()
-      .trim()
-      .replace(/[.,;:!?]/g, '') // Supprime la ponctuation
-      .replace(/\s+/g, ' '); // Normalise les espaces
-  };
-  
-  let isCorrect;
-  if (window.selectedEvalMode === 'libre') {
-    // Pour la réponse libre, on accepte des variantes
-    const normalizedUser = normalizeText(userAnswer);
-    const normalizedCorrect = normalizeText(correctAnswer);
-    isCorrect = normalizedUser === normalizedCorrect;
-  } else {
-    // Pour les QCM, comparaison exacte
-    isCorrect = userAnswer === correctAnswer;
-  }
-  
-  // Calcule le temps de réponse
-  const responseTime = questionStartTime ? Date.now() - questionStartTime : null;
-  
-  // Stocke le résultat
-  evaluationResults.push({
-    question: question,
-    userAnswer: userAnswer,
-    correctAnswer: correctAnswer,
-    isCorrect: isCorrect,
-    mode: window.selectedEvalMode,
-    responseTime: responseTime
-  });
-  
-  // Affiche le feedback
-  showFeedback(isCorrect, correctAnswer, question);
-  
-  // Masque le bouton "Valider" et affiche le bouton "Suivant" (sécurisé)
-  const validateBtn = DOMUtils.safeQuery('#validateBtn');
-  if (validateBtn) validateBtn.style.display = 'none';
-  
-  if (currentQuestionIndex < evaluationQuestions.length - 1) {
-    const nextBtn = DOMUtils.safeQuery('#nextQuestionBtn');
-    if (nextBtn) nextBtn.style.display = '';
-  } else {
-    const finishBtn = DOMUtils.safeQuery('#finishEvalBtn');
-    if (finishBtn) finishBtn.style.display = '';
-  }
-  
-  // Désactive les boutons de choix pour éviter les modifications (sécurisé)
-  document.querySelectorAll('#answerSection .main-btn, #freeResponseInput').forEach(element => {
-    element.disabled = true;
-    if (element.tagName === 'BUTTON') {
-      element.style.opacity = '0.7';
-    }
-  });
-}
 
-function showFeedback(isCorrect, correctAnswer, question) {
-  const feedbackSection = document.getElementById('feedbackSection');
-  
-  if (isCorrect) {
-    feedbackSection.innerHTML = `
-      <div style="background: #d4edda; color: #155724; padding: 16px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 1.2em; font-weight: bold; margin-bottom: 8px;">✅ Correct !</div>
-        <div>Bien joué ! "${correctAnswer}" est la bonne réponse.</div>
-      </div>
-    `;
-  } else {
-    feedbackSection.innerHTML = `
-      <div style="background: #f8d7da; color: #721c24; padding: 16px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 1.2em; font-weight: bold; margin-bottom: 8px;">❌ Incorrect</div>
-        <div style="margin-bottom: 8px;">La bonne réponse était : <strong>"${correctAnswer}"</strong></div>
-        ${question.theme ? `<div style="font-size: 0.9em; opacity: 0.8;">Thème : ${question.theme}</div>` : ''}
-      </div>
-    `;
-  }
-}
+
+
 
 // Configuration des boutons de navigation
-document.addEventListener('DOMContentLoaded', function() {
-  // Délègue les événements car les boutons sont créés dynamiquement
-  document.addEventListener('click', function(e) {
-    if (e.target.id === 'nextQuestionBtn') {
-      showQuestion(currentQuestionIndex + 1);
-    } else if (e.target.id === 'finishEvalBtn') {
-      showEvaluationResults();
-    } else if (e.target.id === 'cancelEvalBtn') {
-      cancelEvaluation();
-    }
-  });
-});
+// Note: Les event listeners sont maintenant attachés directement aux boutons dans validateAnswer()
 
-function showEvaluationResults() {
-  console.log('🎯 [Evaluation] Affichage des résultats commencé');
-  
-  try {
-    const parent = DOMUtils.safeQuery('.container');
-    if (!parent) {
-      console.error('❌ [Evaluation] Conteneur parent non trouvé');
-      return;
-    }
-    
-    // Nettoie l'interface d'évaluation
-    const evalInterface = DOMUtils.safeQuery('#evaluationInterface');
-    if (evalInterface && evalInterface.parentNode) {
-      evalInterface.remove();
-    }
-    
-    // Vérifie que nous avons des résultats
-    if (!evaluationResults || evaluationResults.length === 0) {
-      console.error('❌ [Evaluation] Aucun résultat d\'évaluation trouvé');
-      return;
-    }
-    
-    console.log(`📊 [Evaluation] Traitement de ${evaluationResults.length} résultats`);
-    
-    // Calcule les statistiques avancées
-    const totalQuestions = evaluationResults.length;
-    const correctAnswers = evaluationResults.filter(r => r.isCorrect).length;
-    const scorePercent = Math.round((correctAnswers / totalQuestions) * 100);
-    
-    console.log(`📈 [Evaluation] Score calculé: ${correctAnswers}/${totalQuestions} (${scorePercent}%)`);
-    
-    // Calcule le score pondéré
-    const advancedScore = calculateAdvancedScore(evaluationResults, window.selectedEvalMode);
-    console.log('⚖️ [Evaluation] Score pondéré calculé:', advancedScore);
-    
-    // Synchronise avec les scores de révision
-    syncWithRevisionScores(evaluationResults, window.selectedLang);
-  
-  // Calcule d'abord le breakdown par thème
-  const themeBreakdown = calculateThemeBreakdown(evaluationResults);
-  
-  // Prépare les données de session pour sauvegarde
-  const sessionData = {
-    language: window.selectedLang,
-    mode: window.selectedEvalMode,
-    themes: window.selectedThemes,
-    totalQuestions: totalQuestions,
-    correctAnswers: correctAnswers,
-    score: correctAnswers,
-    percentage: scorePercent,
-    weightedPercentage: advancedScore.weightedPercentage,
-    difficultyFactor: advancedScore.difficultyFactor,
-    results: evaluationResults,
-    duration: evaluationStartTime ? Math.round((Date.now() - evaluationStartTime) / 1000) : null,
-    averageResponseTime: evaluationResults.reduce((sum, r) => sum + (r.responseTime || 0), 0) / evaluationResults.length,
-    themeBreakdown: themeBreakdown
-  };
-  
-  // Sauvegarde la session
-  const sessionId = saveEvaluationSession(sessionData);
-  console.log(`💾 [Evaluation] Session sauvegardée avec ID: ${sessionId}`);
-  
-  // Crée l'écran de résultats
-  const resultsDiv = document.createElement('div');
-  resultsDiv.id = 'evaluationResults';
-  resultsDiv.style.maxWidth = '600px';
-  resultsDiv.style.margin = '0 auto';
-  
-  resultsDiv.innerHTML = `
-    <div style="text-align: center; margin-bottom: 32px;">
-      <h2 style="color: #333; margin-bottom: 24px;">📊 Résultats de l'évaluation</h2>
-      
-      <!-- Score principal -->
-      <div style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); padding: 24px; border-radius: 16px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-        <div style="font-size: 3em; font-weight: bold; margin: 16px 0; color: ${scorePercent >= 70 ? '#28a745' : scorePercent >= 50 ? '#ffc107' : '#dc3545'};">
-          ${correctAnswers}/${totalQuestions}
-        </div>
-        <div style="font-size: 1.6em; margin-bottom: 12px; color: #333;">Score : ${scorePercent}%</div>
-        
-        <!-- Score pondéré -->
-        ${advancedScore.weightedPercentage !== scorePercent ? `
-        <div style="font-size: 1.2em; margin-bottom: 12px; color: #666; padding: 8px; background: rgba(102, 126, 234, 0.1); border-radius: 8px;">
-          📈 Score pondéré : ${advancedScore.weightedPercentage}%
-          <div style="font-size: 0.8em; margin-top: 4px;">
-            (Difficulté ${advancedScore.difficultyFactor}x - Mode ${window.selectedEvalMode === 'libre' ? 'Réponse libre' : 'QCM'})
-          </div>
-        </div>
-        ` : ''}
-        
-        <div style="font-size: 1.1em; color: #666; margin-top: 16px;">
-          ${scorePercent >= 80 ? '🎉 Excellent travail ! Maîtrise parfaite !' : 
-            scorePercent >= 70 ? '👍 Très bon travail ! Continuez ainsi !' : 
-            scorePercent >= 50 ? '👌 Bon début, continuez à vous entraîner !' : 
-            '💪 Ne vous découragez pas, chaque évaluation est un progrès !'}
-        </div>
-      </div>
-      
-      <!-- Analytics par thème -->
-      ${Object.keys(themeBreakdown).length > 1 ? `
-      <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 24px; text-align: left;">
-        <h4 style="color: #333; margin-bottom: 16px; text-align: center;">📚 Performance par thème</h4>
-        <div style="display: grid; gap: 12px; max-width: 500px; margin: 0 auto;">
-          ${Object.entries(themeBreakdown).map(([theme, data]) => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: 8px; border-left: 4px solid ${data.percentage >= 70 ? '#28a745' : data.percentage >= 50 ? '#ffc107' : '#dc3545'};">
-              <span style="font-weight: 500;">${theme}</span>
-              <span style="color: ${data.percentage >= 70 ? '#28a745' : data.percentage >= 50 ? '#ffc107' : '#dc3545'}; font-weight: bold;">
-                ${data.correct}/${data.total} (${data.percentage}%)
-              </span>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-      ` : ''}
-    </div>
-    
-    ${evaluationResults.some(r => !r.isCorrect) ? `
-    <div style="margin-bottom: 32px;">
-      <h3 style="color: #dc3545; margin-bottom: 16px;">❌ Questions incorrectes</h3>
-      <div id="incorrectAnswers" style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
-        ${evaluationResults
-          .filter(r => !r.isCorrect)
-          .map((result, index) => `
-            <div style="margin-bottom: 16px; padding: 12px; background: white; border-radius: 8px; border-left: 4px solid #dc3545;">
-              <div style="font-weight: bold; margin-bottom: 4px;">
-                ${result.mode === 'qcm_fr_lang' ? 
-                  `"${result.question.fr}" → ${result.question[window.currentLangKey]}` :
-                  result.mode === 'qcm_lang_fr' ? 
-                  `"${result.question[window.currentLangKey]}" → ${result.question.fr}` :
-                  `"${result.question[window.currentLangKey]}" → ${result.question.fr}`
-                }
-              </div>
-              <div style="color: #dc3545; font-size: 0.9em;">
-                Votre réponse : "${result.userAnswer}"
-              </div>
-              <div style="color: #28a745; font-size: 0.9em;">
-                Bonne réponse : "${result.correctAnswer}"
-              </div>
-              ${result.question.theme ? `<div style="color: #666; font-size: 0.8em; margin-top: 4px;">Thème : ${result.question.theme}</div>` : ''}
-            </div>
-          `).join('')}
-      </div>
-    </div>
-    ` : ''}
-    
-    <div style="text-align: center;">
-      <button id="restartEvalBtn" class="main-btn" style="margin-right: 12px; background: #007bff;">
-        🔄 Recommencer avec les mêmes paramètres
-      </button>
-      <button id="newEvalBtn" class="main-btn" style="margin-right: 12px; background: #28a745;">
-        ⚙️ Nouvelle évaluation
-      </button>
-      <button id="backToMenuBtn" class="main-btn" style="background: #6c757d;">
-        🏠 Retour au menu
-      </button>
-    </div>
-  `;
-  
-  parent.appendChild(resultsDiv);
-  
-  // Configure les boutons
-  document.getElementById('restartEvalBtn').onclick = function() {
-    resultsDiv.remove();
-    startEvaluation();
-  };
-  
-  document.getElementById('newEvalBtn').onclick = function() {
-    resultsDiv.remove();
-    // Remet à zéro et recommence la sélection
-    window.selectedLang = null;
-    window.selectedEvalMode = null;
-    window.selectedThemes = null;
-    window.selectedQuestionCount = null;
-    location.reload();
-  };
-  
-  document.getElementById('backToMenuBtn').onclick = function() {
-    window.location.href = 'index.html';
-  };
-  
-  console.log('✅ [Evaluation] Résultats affichés avec succès');
-  
-  } catch (error) {
-    console.error('❌ [Evaluation] Erreur lors de l\'affichage des résultats:', error);
-    
-    // Affichage d'urgence simple
-    const parent = document.querySelector('.container');
-    if (parent) {
-      parent.innerHTML = `
-        <div style="text-align: center; padding: 40px;">
-          <h2 style="color: #dc3545;">❌ Erreur d'affichage</h2>
-          <p>Une erreur s'est produite lors de l'affichage des résultats.</p>
-          <p><strong>Score:</strong> ${evaluationResults ? evaluationResults.filter(r => r.isCorrect).length : 0}/${evaluationResults ? evaluationResults.length : 0}</p>
-          <button class="main-btn" onclick="window.location.href='index.html'" style="margin-top: 20px;">
-            🏠 Retour à l'accueil
-          </button>
-        </div>
-      `;
-    }
-  }
-}
+
 
 function cancelEvaluation() {
   // Demande confirmation avant d'annuler
@@ -1632,6 +1654,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
   }, 1000);
 });
+}
 
 // Fin du fichier evaluation.js
 
