@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Affichage des scores de thèmes</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test - Affichage des scores de thèmes</h1>
+        
+        <div id="testResults" style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3>Résultats du test :</h3>
+            <div id="output"></div>
+        </div>
+        
+        <button onclick="runTest()" class="main-btn">Lancer le test</button>
+        
+        <div style="margin-top: 20px;">
+            <h3>Instructions :</h3>
+            <ol>
+                <li>Cliquez sur "Lancer le test"</li>
+                <li>Vérifiez que les fonctions de scores sont chargées</li>
+                <li>Créez quelques scores de test</li>
+                <li>Vérifiez l'affichage dans les logs</li>
+            </ol>
+        </div>
+    </div>
+
+    <script src="dom-utils.js"></script>
+    <script src="revision.js"></script>
+    <script>
+        function runTest() {
+            const output = document.getElementById('output');
+            let results = '<div style="font-family: monospace;">';
+            
+            // Test 1: Vérifier que les fonctions sont chargées
+            results += '<h4>📋 Test 1: Chargement des fonctions</h4>';
+            results += `getScoreForTheme disponible: <strong>${typeof getScoreForTheme === 'function' ? '✅ OUI' : '❌ NON'}</strong><br>`;
+            results += `getThemeScores disponible: <strong>${typeof getThemeScores === 'function' ? '✅ OUI' : '❌ NON'}</strong><br>`;
+            
+            if (typeof getScoreForTheme !== 'function') {
+                results += '<div style="color: red; margin: 10px 0;">❌ ERREUR: Les fonctions de scores ne sont pas chargées!</div>';
+                output.innerHTML = results + '</div>';
+                return;
+            }
+            
+            // Test 2: Créer des scores de test
+            results += '<h4>📝 Test 2: Création de scores de test</h4>';
+            
+            try {
+                // Utiliser les fonctions pour créer des scores de test
+                if (typeof updateScoreForTheme === 'function') {
+                    // Créer des scores pour différents thèmes
+                    const testData = [
+                        { lang: 'anglais', theme: 'Animaux', score: 3 },
+                        { lang: 'anglais', theme: 'Nourriture', score: 8 },
+                        { lang: 'anglais', theme: 'Maison', score: 6 },
+                        { lang: 'anglais', theme: 'Transport', score: null } // Nouveau
+                    ];
+                    
+                    testData.forEach(({ lang, theme, score }) => {
+                        if (score !== null) {
+                            // Simule plusieurs bonnes/mauvaises réponses pour atteindre le score souhaité
+                            for (let i = 0; i < 10; i++) {
+                                const isGood = i < score; // Les premières réponses sont bonnes
+                                updateScoreForTheme(lang, theme, isGood);
+                            }
+                            results += `Créé score pour ${theme}: ${getScoreForTheme(lang, theme)}/10<br>`;
+                        }
+                    });
+                }
+            } catch (error) {
+                results += `<div style="color: orange;">⚠️ Erreur création scores: ${error.message}</div>`;
+            }
+            
+            // Test 3: Vérifier la récupération des scores
+            results += '<h4>🔍 Test 3: Récupération des scores</h4>';
+            
+            const testThemes = ['Animaux', 'Nourriture', 'Maison', 'Transport', 'Couleurs'];
+            testThemes.forEach(theme => {
+                const score = getScoreForTheme('anglais', theme);
+                const status = score !== null ? `${score}/10` : 'nouveau';
+                const emoji = score === null ? '🆕' : 
+                             score >= 8 ? '🏆' : 
+                             score >= 6 ? '⭐' : 
+                             score >= 4 ? '📈' : '💪';
+                
+                results += `${emoji} ${theme}: <strong>${status}</strong><br>`;
+            });
+            
+            // Test 4: Test du tri
+            results += '<h4>📊 Test 4: Simulation du tri</h4>';
+            
+            const sortedThemes = testThemes.sort((a, b) => {
+                const scoreA = getScoreForTheme('anglais', a);
+                const scoreB = getScoreForTheme('anglais', b);
+                
+                if (scoreA === null && scoreB === null) return a.localeCompare(b);
+                if (scoreA === null) return -1;
+                if (scoreB === null) return 1;
+                
+                return scoreA - scoreB;
+            });
+            
+            results += 'Ordre après tri:<br>';
+            sortedThemes.forEach((theme, index) => {
+                const score = getScoreForTheme('anglais', theme);
+                const status = score !== null ? `${score}/10` : 'nouveau';
+                results += `${index + 1}. ${theme} (${status})<br>`;
+            });
+            
+            // Test 5: Afficher les données brutes
+            results += '<h4>🗃️ Test 5: Données de localStorage</h4>';
+            try {
+                const rawScores = getThemeScores();
+                results += `Nombre de scores stockés: <strong>${Object.keys(rawScores).length}</strong><br>`;
+                Object.entries(rawScores).forEach(([key, data]) => {
+                    results += `${key}: ${JSON.stringify(data)}<br>`;
+                });
+            } catch (error) {
+                results += `<div style="color: red;">❌ Erreur lecture localStorage: ${error.message}</div>`;
+            }
+            
+            results += '</div>';
+            output.innerHTML = results;
+            
+            console.log('🧪 Test terminé - Vérifiez les résultats ci-dessus');
+        }
+        
+        // Test automatique au chargement
+        window.addEventListener('load', () => {
+            console.log('🚀 Page de test chargée');
+            console.log('📋 Fonctions disponibles:');
+            console.log('  - getScoreForTheme:', typeof getScoreForTheme);
+            console.log('  - getThemeScores:', typeof getThemeScores);
+            console.log('  - updateScoreForTheme:', typeof updateScoreForTheme);
+        });
+    </script>
+</body>
+</html>
