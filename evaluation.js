@@ -1383,18 +1383,44 @@ function showQCMQuestion_FrenchToLang(question) {
 
 function generateDistractors(currentQuestion, field, count) {
   // Récupère toutes les valeurs possibles du champ (langKey ou 'fr')
+  // CORRECTION: Filtre aussi par les thèmes sélectionnés pour l'évaluation
   const allValues = sheetDBData
     .filter(card => 
       card.langue === window.selectedLang && 
+      card.theme && window.selectedThemes.includes(card.theme.trim()) && // Filtre par thèmes sélectionnés
       card[field] && 
       card[field] !== currentQuestion[field]
     )
     .map(card => card[field])
     .filter((value, index, arr) => arr.indexOf(value) === index); // Supprime les doublons
   
+  // Vérification de sécurité : s'il n'y a pas assez de distracteurs dans les thèmes sélectionnés,
+  // utilise tous les thèmes de la langue comme fallback
+  if (allValues.length < count) {
+    console.warn(`⚠️ [Evaluation] Pas assez de distracteurs dans les thèmes sélectionnés (${allValues.length}/${count}). Utilisation de tous les thèmes comme fallback.`);
+    const fallbackValues = sheetDBData
+      .filter(card => 
+        card.langue === window.selectedLang && 
+        card[field] && 
+        card[field] !== currentQuestion[field]
+      )
+      .map(card => card[field])
+      .filter((value, index, arr) => arr.indexOf(value) === index);
+    
+    // Combine les valeurs des thèmes sélectionnés avec le fallback si nécessaire
+    const combinedValues = [...new Set([...allValues, ...fallbackValues])];
+    const shuffled = combinedValues.sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
+  }
+  
   // Mélange et prend le nombre demandé
   const shuffled = allValues.sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+  const result = shuffled.slice(0, count);
+  
+  console.log(`🎯 [Evaluation] Distracteurs générés pour "${currentQuestion[field]}" (${field}):`, result);
+  console.log(`📚 [Evaluation] Thèmes utilisés: ${window.selectedThemes.join(', ')}`);
+  
+  return result;
 }
 
 function selectChoice(selectedButton, allChoices, correctAnswer) {
