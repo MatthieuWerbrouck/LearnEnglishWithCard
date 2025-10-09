@@ -489,11 +489,37 @@ window.addEventListener('DOMContentLoaded', function() {
     themeDiv.appendChild(scrollContainer);
 
     // Récupère les thèmes de la langue sélectionnée
-    const themes = [...new Set(sheetDBData
+    const rawThemes = [...new Set(sheetDBData
       .filter(card => card.langue && card.langue.trim() === window.selectedLang)
       .map(card => card.theme && card.theme.trim())
       .filter(Boolean)
     )];
+    
+    // Trie les thèmes par note (ordre croissant - les plus faibles en premier)
+    const themes = rawThemes.sort((themeA, themeB) => {
+      // Utilise la fonction getScoreForTheme de revision.js si disponible
+      if (typeof getScoreForTheme === 'function') {
+        const scoreA = getScoreForTheme(window.selectedLang, themeA);
+        const scoreB = getScoreForTheme(window.selectedLang, themeB);
+        
+        // Les thèmes sans score (null) sont placés en premier (priorité max)
+        if (scoreA === null && scoreB === null) return themeA.localeCompare(themeB);
+        if (scoreA === null) return -1; // themeA avant themeB
+        if (scoreB === null) return 1;  // themeB avant themeA
+        
+        // Tri par score croissant (plus faibles en premier)
+        return scoreA - scoreB;
+      } else {
+        // Fallback : tri alphabétique si getScoreForTheme n'est pas disponible
+        console.warn('⚠️ [Evaluation] getScoreForTheme non disponible, tri alphabétique');
+        return themeA.localeCompare(themeB);
+      }
+    });
+    
+    console.log('📊 [Evaluation] Thèmes triés par score:', themes.map(theme => {
+      const score = typeof getScoreForTheme === 'function' ? getScoreForTheme(window.selectedLang, theme) : null;
+      return `${theme} (${score !== null ? score + '/10' : 'nouveau'})`;
+    }));
 
     // Stocke les thèmes cochés (persistant sur toute la sélection)
     let checkedThemes = [];
@@ -521,16 +547,65 @@ window.addEventListener('DOMContentLoaded', function() {
           }
           updateQuestionCountDefault();
         };
-        // Ajoute le tooltip avec le nombre de mots
+        // Ajoute le tooltip avec le nombre de mots ET la note du thème
         const wordCount = sheetDBData.filter(card =>
           card.langue && card.langue.trim() === window.selectedLang &&
           card.theme && card.theme.trim() === theme
         ).length;
+        
+        // Récupère la note du thème si disponible
+        const themeScore = typeof getScoreForTheme === 'function' ? 
+          getScoreForTheme(window.selectedLang, theme) : null;
+        
+        // Construit le tooltip avec mots + note
+        let tooltipText = `${wordCount} mot${wordCount > 1 ? 's' : ''} dans ce thème`;
+        if (themeScore !== null) {
+          // Ajoute la note avec un emoji selon le niveau
+          let scoreEmoji = '📖'; // Par défaut
+          if (themeScore >= 8) scoreEmoji = '🏆'; // Excellent
+          else if (themeScore >= 6) scoreEmoji = '⭐'; // Bon
+          else if (themeScore >= 4) scoreEmoji = '📈'; // En progression
+          else scoreEmoji = '💪'; // À travailler
+          
+          tooltipText += `\n${scoreEmoji} Note: ${themeScore}/10`;
+        } else {
+          tooltipText += '\n🆕 Nouveau thème (pas encore évalué)';
+        }
+        
         // Sécurisation: Échappe le contenu du tooltip
-        label.title = DOMUtils.escapeHtml(`${wordCount} mot${wordCount > 1 ? 's' : ''} dans ce thème`);
+        label.title = DOMUtils.escapeHtml(tooltipText);
         label.appendChild(checkbox);
+        
+        // Construit l'affichage du thème avec emoji de score
+        let displayText = ' ' + DOMUtils.escapeHtml(theme);
+        let labelStyle = 'color: #333;'; // Style par défaut
+        
+        if (themeScore !== null) {
+          let emoji = '📖';
+          if (themeScore >= 8) {
+            emoji = '🏆';
+            labelStyle = 'color: #22c55e; font-weight: 500;'; // Vert pour excellent
+          } else if (themeScore >= 6) {
+            emoji = '⭐';
+            labelStyle = 'color: #3b82f6; font-weight: 500;'; // Bleu pour bon
+          } else if (themeScore >= 4) {
+            emoji = '📈';
+            labelStyle = 'color: #f59e0b; font-weight: 500;'; // Orange pour progression
+          } else {
+            emoji = '💪';
+            labelStyle = 'color: #ef4444; font-weight: 500;'; // Rouge pour à travailler
+          }
+          displayText = ` ${emoji} ${DOMUtils.escapeHtml(theme)} (${themeScore}/10)`;
+        } else {
+          displayText = ` 🆕 ${DOMUtils.escapeHtml(theme)} (nouveau)`;
+          labelStyle = 'color: #6b7280; font-style: italic;'; // Gris pour nouveau
+        }
+        
+        // Applique le style au label
+        label.style.cssText += labelStyle;
+        
         // Sécurisation: Utilise textContent au lieu de concaténation directe
-        const themeText = document.createTextNode(' ' + DOMUtils.escapeHtml(theme));
+        const themeText = document.createTextNode(displayText);
         label.appendChild(themeText);
         scrollContainer.appendChild(label);
       });
