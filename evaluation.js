@@ -971,16 +971,48 @@ function initEvaluationInterface() {
       background: 'rgba(239, 68, 68, 0.1)',
       borderColor: 'rgba(239, 68, 68, 0.3)',
       color: '#dc2626',
-      transition: 'all 0.3s ease'
+      transition: 'all 0.3s ease',
+      cursor: 'pointer',
+      position: 'relative',
+      zIndex: '10',
+      pointerEvents: 'auto',
+      padding: '12px 24px',
+      border: '2px solid rgba(239, 68, 68, 0.3)',
+      borderRadius: '8px',
+      fontSize: '14px',
+      fontWeight: 'bold'
     }
   });
   
   cancelDiv.appendChild(cancelBtn);
   
-  // Event listener direct pour le bouton d'annulation
-  cancelBtn.onclick = function() {
-    cancelEvaluation();
+  console.log('🔨 [Debug] Bouton d\'annulation créé avec ID:', cancelBtn.id);
+  
+  // Event listener principal avec addEventListener (plus fiable)
+  cancelBtn.addEventListener('click', function(e) {
+    console.log('🖱️ [Debug] Clic détecté sur le bouton d\'annulation');
+    console.log('🔍 [Debug] Fonction cancelEvaluation disponible:', typeof cancelEvaluation);
+    console.log('🎯 [Debug] Event details:', e);
+    
+    // Empêche la propagation et le comportement par défaut
+    e.preventDefault();
+    e.stopPropagation();
+    
+    try {
+      cancelEvaluation();
+    } catch (error) {
+      console.error('❌ [Debug] Erreur lors de l\'exécution de cancelEvaluation:', error);
+      alert('Erreur: ' + error.message);
+    }
+  });
+  
+  // Event listener de secours avec onclick
+  cancelBtn.onclick = function(e) {
+    console.log('🎯 [Debug] Onclick event listener activé en secours');
+    return false; // Pour empêcher le comportement par défaut
   };
+  
+  console.log('🔨 [Debug] Event listeners attachés au bouton');
   
   evalDiv.appendChild(questionCard);
   evalDiv.appendChild(answerSection);
@@ -989,6 +1021,16 @@ function initEvaluationInterface() {
   evalDiv.appendChild(cancelDiv);
   
   parent.appendChild(evalDiv);
+  
+  // Vérification post-création que le bouton est bien dans le DOM
+  setTimeout(() => {
+    const btnCheck = document.getElementById('cancelEvalBtn');
+    console.log('✅ [Debug] Vérification bouton dans DOM:', btnCheck ? 'TROUVÉ' : 'NON TROUVÉ');
+    if (btnCheck) {
+      console.log('✅ [Debug] Style du bouton:', window.getComputedStyle(btnCheck).display);
+      console.log('✅ [Debug] Position du bouton:', btnCheck.getBoundingClientRect());
+    }
+  }, 100);
 }
 
 function showFeedback(isCorrect, correctAnswer, question) {
@@ -1533,12 +1575,27 @@ function showFreeResponseQuestion(question) {
 
 
 
+// Fonction globale pour tester le bouton manuellement depuis la console
+window.testCancelButton = function() {
+  const btn = document.getElementById('cancelEvalBtn');
+  if (btn) {
+    console.log('🧪 [Test] Bouton trouvé, simulation du clic...');
+    btn.click();
+  } else {
+    console.error('❌ [Test] Bouton non trouvé !');
+  }
+};
+
 function cancelEvaluation() {
+  console.log('🚀 [Debug] Fonction cancelEvaluation() appelée');
+  
   // Demande confirmation avant d'annuler
   const confirmCancel = confirm(
     '⚠️ Êtes-vous sûr de vouloir annuler l\'évaluation ?\n\n' +
     'Votre progression actuelle sera perdue.'
   );
+  
+  console.log('🤔 [Debug] Réponse de confirmation:', confirmCancel);
   
   if (confirmCancel) {
     // Supprime l'interface d'évaluation

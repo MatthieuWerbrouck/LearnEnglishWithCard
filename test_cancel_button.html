@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Bouton Annuler</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Test du bouton Annuler l'évaluation</h1>
+        <div id="testArea"></div>
+        <button onclick="testCancelButton()">Créer le bouton d'annulation</button>
+    </div>
+
+    <script src="dom-utils.js"></script>
+    <script>
+        // Test de la fonction cancelEvaluation
+        function cancelEvaluation() {
+            console.log('🎯 Fonction cancelEvaluation appelée !');
+            const confirmCancel = confirm(
+                '⚠️ Êtes-vous sûr de vouloir annuler l\'évaluation ?\n\n' +
+                'Votre progression actuelle sera perdue.'
+            );
+            
+            if (confirmCancel) {
+                alert('✅ Évaluation annulée avec succès !');
+                console.log('✅ Évaluation annulée');
+            } else {
+                console.log('❌ Annulation refusée par l\'utilisateur');
+            }
+        }
+
+        function testCancelButton() {
+            const testArea = document.getElementById('testArea');
+            
+            // Nettoie la zone de test
+            testArea.innerHTML = '';
+            
+            // Crée le bouton comme dans evaluation.js
+            const cancelDiv = DOMUtils.createSafeElement('div', {
+                style: {
+                    textAlign: 'center',
+                    marginTop: '20px',
+                    borderTop: '2px solid rgba(102, 126, 234, 0.1)',
+                    paddingTop: '20px'
+                }
+            });
+            
+            const cancelBtn = DOMUtils.createSafeElement('button', {
+                attributes: { id: 'cancelEvalBtn' },
+                className: 'nav-btn',
+                textContent: '❌ Annuler l\'évaluation',
+                style: {
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    borderColor: 'rgba(239, 68, 68, 0.3)',
+                    color: '#dc2626',
+                    transition: 'all 0.3s ease',
+                    padding: '12px 24px',
+                    border: '2px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                }
+            });
+            
+            cancelDiv.appendChild(cancelBtn);
+            
+            // Event listener direct pour le bouton d'annulation
+            cancelBtn.onclick = function() {
+                console.log('🖱️ Clic détecté sur le bouton d\'annulation');
+                cancelEvaluation();
+            };
+            
+            // Test alternatif avec addEventListener
+            cancelBtn.addEventListener('click', function() {
+                console.log('🎯 Event listener addEventListener activé');
+            });
+            
+            testArea.appendChild(cancelDiv);
+            
+            console.log('🔨 Bouton d\'annulation créé et ajouté au DOM');
+            console.log('📍 Bouton trouvé dans le DOM:', document.getElementById('cancelEvalBtn'));
+        }
+    </script>
+</body>
+</html>
