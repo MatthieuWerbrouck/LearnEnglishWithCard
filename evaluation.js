@@ -812,11 +812,59 @@ function prepareEvaluationData() {
   
   console.log('Cartes filtrées:', filteredCards.length);
   
-  // Mélange aléatoirement les cartes
-  const shuffledCards = [...filteredCards].sort(() => Math.random() - 0.5);
+  // CORRECTION: Éliminer les doublons basés sur le contenu des mots
+  const uniqueCards = [];
+  const seenWords = new Set();
+  
+  // Détermine la clé principale selon le mode d'évaluation
+  const primaryKey = window.selectedEvalMode === 'qcm_lang_fr' || window.selectedEvalMode === 'libre' ? 
+    langKey : 'fr'; // Si on part de la langue étrangère vers français, ou réponse libre
+  
+  filteredCards.forEach(card => {
+    const primaryWord = card[primaryKey]?.trim().toLowerCase();
+    const secondaryWord = card[primaryKey === 'fr' ? langKey : 'fr']?.trim().toLowerCase();
+    
+    // Crée une clé unique basée sur les deux mots (dans les deux sens)
+    const uniqueKey1 = `${primaryWord}-${secondaryWord}`;
+    const uniqueKey2 = `${secondaryWord}-${primaryWord}`;
+    
+    // Vérifie qu'aucune des deux combinaisons n'a déjà été vue
+    if (!seenWords.has(uniqueKey1) && !seenWords.has(uniqueKey2) && 
+        primaryWord && secondaryWord) {
+      seenWords.add(uniqueKey1);
+      seenWords.add(uniqueKey2);
+      uniqueCards.push(card);
+    }
+  });
+  
+  console.log(`📝 [Evaluation] Cartes uniques: ${uniqueCards.length} (éliminé ${filteredCards.length - uniqueCards.length} doublons)`);
+  
+  // Mélange aléatoirement les cartes uniques
+  const shuffledCards = [...uniqueCards].sort(() => Math.random() - 0.5);
   
   // Prend le nombre de questions demandé
-  evaluationQuestions = shuffledCards.slice(0, window.selectedQuestionCount);
+  const availableQuestions = Math.min(window.selectedQuestionCount, uniqueCards.length);
+  evaluationQuestions = shuffledCards.slice(0, availableQuestions);
+  
+  // Avertissement si moins de questions que demandé
+  if (window.selectedQuestionCount > uniqueCards.length) {
+    console.warn(`⚠️ [Evaluation] Seulement ${uniqueCards.length} mots uniques disponibles pour ${window.selectedQuestionCount} questions demandées`);
+    // Optionnel: afficher un message à l'utilisateur
+    if (window.selectedQuestionCount - uniqueCards.length > 0) {
+      const message = `ℹ️ Attention: Seulement ${uniqueCards.length} mots uniques disponibles dans les thèmes sélectionnés.\n` +
+        `L'évaluation comportera ${availableQuestions} questions au lieu de ${window.selectedQuestionCount} demandées.`;
+      
+      // Affiche le message mais continue l'évaluation
+      setTimeout(() => {
+        if (confirm(message + '\n\nContinuer avec ' + availableQuestions + ' questions ?')) {
+          // Continue normalement
+        } else {
+          // Retourne à la sélection des thèmes
+          location.reload();
+        }
+      }, 100);
+    }
+  }
   
   // Stocke la clé de langue pour usage ultérieur
   window.currentLangKey = langKey;
