@@ -19,6 +19,61 @@ const EVALUATION_HISTORY_KEY = 'evaluation_history';
 const MAX_HISTORY_ENTRIES = 100; // Limite pour éviter l'inflation du localStorage
 
 /**
+ * Fonction utilitaire pour gérer la précision des scores
+ * @param {number} value - Valeur à formater
+ * @param {number} precision - Nombre de décimales (défaut: 2)
+ * @returns {number} Valeur avec la précision spécifiée
+ */
+function formatPreciseScore(value, precision = 2) {
+  if (typeof value !== 'number' || isNaN(value)) return 0;
+  return Math.round(value * Math.pow(10, precision)) / Math.pow(10, precision);
+}
+
+/**
+ * Calcule un pourcentage avec la précision demandée
+ * @param {number} numerator - Numérateur
+ * @param {number} denominator - Dénominateur  
+ * @param {number} precision - Précision décimale (défaut: 2)
+ * @returns {number} Pourcentage précis
+ */
+function calculatePrecisePercentage(numerator, denominator, precision = 2) {
+  if (!denominator || denominator === 0) return 0;
+  const percentage = (numerator / denominator) * 100;
+  return formatPreciseScore(percentage, precision);
+}
+
+/**
+ * Convertit une note sur 10 en pourcentage
+ * @param {number} score - Score sur 10
+ * @param {number} precision - Précision décimale (défaut: 2)
+ * @returns {number} Pourcentage équivalent
+ */
+function scoreToPercentage(score, precision = 2) {
+  if (score === null || score === undefined || typeof score !== 'number') return null;
+  return formatPreciseScore((score / 10) * 100, precision);
+}
+
+/**
+ * Récupère le score d'un thème avec différents formats d'affichage
+ * @param {string} language - Langue du thème
+ * @param {string} theme - Nom du thème
+ * @returns {Object|null} Objet avec les différents formats de score
+ */
+function getThemeScoreFormats(language, theme) {
+  if (typeof getScoreForTheme !== 'function') return null;
+  
+  const rawScore = getScoreForTheme(language, theme);
+  if (rawScore === null) return null;
+  
+  return {
+    raw: rawScore,                           // Score brut sur 10 (ex: 7.235)
+    outOf10: formatPreciseScore(rawScore, 2), // Score formaté sur 10 (ex: 7.24/10)
+    percentage: scoreToPercentage(rawScore, 2), // Pourcentage précis (ex: 72.35%)
+    precisePercentage: scoreToPercentage(rawScore, 4) // Pourcentage ultra-précis (ex: 72.3500%)
+  };
+}
+
+/**
  * Sauvegarde les résultats d'une session d'évaluation
  * @param {Object} sessionData - Données de la session d'évaluation
  */
@@ -95,6 +150,91 @@ function generateSessionId() {
 }
 
 /**
+ * Récupère les statistiques de progression détaillées
+ * @param {string} language - Langue concernée
+ * @param {Array} themes - Thèmes à analyser (optionnel)
+ * @returns {Object} Statistiques de progression
+ */
+function getProgressionStats(language, themes = null) {
+  try {
+    const history = getEvaluationHistory();
+    
+    // Filtre par langue et thèmes si spécifiés
+    let relevantSessions = history.filter(session => session.language === language);
+    if (themes && themes.length > 0) {
+      relevantSessions = relevantSessions.filter(session => 
+        session.themes && session.themes.some(theme => themes.includes(theme))
+      );
+    }
+    
+    if (relevantSessions.length === 0) {
+      return { hasData: false, message: 'Aucune donnée de progression disponible' };
+    }
+    
+    // Calcule les statistiques de progression
+    const scores = relevantSessions.map(s => ({
+      date: s.date,
+      timestamp: s.timestamp,
+      standardScore: s.percentage,
+      weightedScore: s.weightedPercentage || s.percentage,
+      duration: s.duration,
+      questionsCount: s.totalQuestions
+    }));
+    
+    // Trie par date (plus récent en dernier)
+    scores.sort((a, b) => a.timestamp - b.timestamp);
+    
+    const latestScore = scores[scores.length - 1];
+    const firstScore = scores[0];
+    
+    // Calcule la progression
+    const standardProgression = formatPreciseScore(latestScore.standardScore - firstScore.standardScore, 2);
+    const weightedProgression = formatPreciseScore(latestScore.weightedScore - firstScore.weightedScore, 2);
+    
+    // Moyenne mobile sur les 5 dernières sessions
+    const recentSessions = scores.slice(-5);
+    const avgRecentStandard = formatPreciseScore(
+      recentSessions.reduce((sum, s) => sum + s.standardScore, 0) / recentSessions.length, 2
+    );
+    const avgRecentWeighted = formatPreciseScore(
+      recentSessions.reduce((sum, s) => sum + s.weightedScore, 0) / recentSessions.length, 2
+    );
+    
+    return {
+      hasData: true,
+      totalSessions: relevantSessions.length,
+      dateRange: {
+        first: new Date(firstScore.timestamp).toLocaleDateString('fr-FR'),
+        last: new Date(latestScore.timestamp).toLocaleDateString('fr-FR')
+      },
+      progression: {
+        standard: standardProgression,
+        weighted: weightedProgression
+      },
+      current: {
+        standard: latestScore.standardScore,
+        weighted: latestScore.weightedScore
+      },
+      averageRecent: {
+        standard: avgRecentStandard,
+        weighted: avgRecentWeighted,
+        sessionCount: recentSessions.length
+      },
+      trend: {
+        improving: standardProgression > 0,
+        stable: Math.abs(standardProgression) <= 2,
+        declining: standardProgression < -2
+      },
+      allScores: scores // Pour graphiques potentiels
+    };
+    
+  } catch (error) {
+    console.error('❌ [Progression] Erreur calcul statistiques:', error);
+    return { hasData: false, error: error.message };
+  }
+}
+
+/**
  * Calcule la répartition des scores par thème
  * @param {Array} results - Résultats détaillés de l'évaluation
  * @returns {Object} Breakdown par thème
@@ -116,10 +256,11 @@ function calculateThemeBreakdown(results) {
     }
   });
   
-  // Calcule les pourcentages
+  // Calcule les pourcentages avec précision
   Object.keys(breakdown).forEach(theme => {
     const data = breakdown[theme];
-    data.percentage = Math.round((data.correct / data.total) * 100);
+    data.percentage = calculatePrecisePercentage(data.correct, data.total, 2);
+    data.precisePercentage = calculatePrecisePercentage(data.correct, data.total, 4); // Version très précise pour analytics
   });
   
   return breakdown;
@@ -171,24 +312,28 @@ function calculateAdvancedScore(results, mode) {
     totalPossiblePoints += weight;
   });
   
-  // Calcule le score pondéré
+  // Calcule le score pondéré avec précision
   const weightedPercentage = totalPossiblePoints > 0 ? 
-    Math.round((totalWeightedPoints / totalPossiblePoints) * 100) : 0;
+    calculatePrecisePercentage(totalWeightedPoints, totalPossiblePoints, 2) : 0;
   
-  // Métrique de difficulté globale
+  // Métrique de difficulté globale avec précision
   const difficultyFactor = results.length > 0 ? 
-    Math.round((totalPossiblePoints / results.length) * 100) / 100 : 1.0;
+    formatPreciseScore(totalPossiblePoints / results.length, 3) : 1.0;
   
   const correctCount = results.filter(r => r && r.isCorrect).length;
   const standardPercentage = results.length > 0 ? 
-    Math.round((correctCount / results.length) * 100) : 0;
+    calculatePrecisePercentage(correctCount, results.length, 2) : 0;
   
   return {
-    weightedScore: Math.round(totalWeightedPoints * 10) / 10,
-    maxWeightedScore: Math.round(totalPossiblePoints * 10) / 10,
+    weightedScore: formatPreciseScore(totalWeightedPoints, 3),
+    maxWeightedScore: formatPreciseScore(totalPossiblePoints, 3),
     weightedPercentage: weightedPercentage,
+    preciseWeightedPercentage: calculatePrecisePercentage(totalWeightedPoints, totalPossiblePoints, 4), // Version ultra-précise
     difficultyFactor: difficultyFactor,
-    standardPercentage: standardPercentage
+    standardPercentage: standardPercentage,
+    preciseStandardPercentage: calculatePrecisePercentage(correctCount, results.length, 4), // Version ultra-précise
+    rawWeightedScore: totalWeightedPoints, // Score brut non arrondi
+    rawMaxScore: totalPossiblePoints // Score max brut non arrondi
   };
 }
 
@@ -227,7 +372,7 @@ function syncWithRevisionScores(results, language) {
           updateScoreForTheme(language, theme, isCorrect);
         });
         
-        console.log(`📊 [Sync] Thème "${theme}": ${Math.round(successRate * 100)}% de réussite`);
+        console.log(`📊 [Sync] Thème "${theme}": ${calculatePrecisePercentage(themeData.correct, themeData.total, 2)}% de réussite (précis: ${calculatePrecisePercentage(themeData.correct, themeData.total, 4)}%)`);
       });
       
     } else {
@@ -469,14 +614,57 @@ window.addEventListener('DOMContentLoaded', function() {
     });
     themeDiv.appendChild(title);
 
-    // Ajout de la barre de recherche
+    // Ajout de la barre de recherche et des options d'affichage
+    const controlsContainer = DOMUtils.createSafeElement('div', {
+      style: { 
+        display: 'flex', 
+        gap: '12px', 
+        alignItems: 'center', 
+        marginBottom: '12px',
+        flexWrap: 'wrap'
+      }
+    });
+    
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
     searchInput.className = 'form-input';
     searchInput.placeholder = 'Rechercher un thème...';
-    searchInput.style.marginBottom = '12px';
-    themeDiv.appendChild(searchInput);
+    searchInput.style.flex = '1';
+    searchInput.style.minWidth = '200px';
+    
+    // Bouton pour basculer l'affichage des scores
+    const scoreDisplayBtn = DOMUtils.createSafeElement('button', {
+      className: 'nav-btn',
+      textContent: '📊 % → /10',
+      style: {
+        fontSize: '0.85em',
+        padding: '8px 12px',
+        whiteSpace: 'nowrap'
+      }
+    });
+    
+    // Variable pour tracker le mode d'affichage (true = pourcentage, false = sur 10)
+    let displayAsPercentage = true;
+    
+    controlsContainer.appendChild(searchInput);
+    controlsContainer.appendChild(scoreDisplayBtn);
+    themeDiv.appendChild(controlsContainer);
 
+    // Légende des couleurs
+    const legend = DOMUtils.createSafeElement('div', {
+      style: {
+        fontSize: '0.8em',
+        color: '#666',
+        marginBottom: '8px',
+        padding: '8px',
+        background: 'rgba(102, 126, 234, 0.1)',
+        borderRadius: '6px',
+        textAlign: 'center'
+      }
+    });
+    legend.innerHTML = '🏆 Excellent (80%+) | ⭐ Bon (60%+) | 📈 En progression (40%+) | 💪 À travailler (<40%) | 🆕 Nouveau';
+    themeDiv.appendChild(legend);
+    
     // Ajout d'un conteneur scrollable pour les thèmes
     const scrollContainer = document.createElement('div');
     scrollContainer.style.maxHeight = '220px';
@@ -495,30 +683,26 @@ window.addEventListener('DOMContentLoaded', function() {
       .filter(Boolean)
     )];
     
-    // Trie les thèmes par note (ordre croissant - les plus faibles en premier)
+    // Trie les thèmes par performance (ordre croissant - les plus faibles en premier)
     const themes = rawThemes.sort((themeA, themeB) => {
-      // Utilise la fonction getScoreForTheme de revision.js si disponible
-      if (typeof getScoreForTheme === 'function') {
-        const scoreA = getScoreForTheme(window.selectedLang, themeA);
-        const scoreB = getScoreForTheme(window.selectedLang, themeB);
-        
-        // Les thèmes sans score (null) sont placés en premier (priorité max)
-        if (scoreA === null && scoreB === null) return themeA.localeCompare(themeB);
-        if (scoreA === null) return -1; // themeA avant themeB
-        if (scoreB === null) return 1;  // themeB avant themeA
-        
-        // Tri par score croissant (plus faibles en premier)
-        return scoreA - scoreB;
-      } else {
-        // Fallback : tri alphabétique si getScoreForTheme n'est pas disponible
-        console.warn('⚠️ [Evaluation] getScoreForTheme non disponible, tri alphabétique');
-        return themeA.localeCompare(themeB);
-      }
+      // Utilise les scores formatés pour un tri cohérent
+      const scoreDataA = getThemeScoreFormats(window.selectedLang, themeA);
+      const scoreDataB = getThemeScoreFormats(window.selectedLang, themeB);
+      
+      // Les thèmes sans score (null) sont placés en premier (priorité max)
+      if (!scoreDataA && !scoreDataB) return themeA.localeCompare(themeB);
+      if (!scoreDataA) return -1; // themeA avant themeB
+      if (!scoreDataB) return 1;  // themeB avant themeA
+      
+      // Tri par pourcentage croissant (plus faibles en premier pour révision prioritaire)
+      return scoreDataA.percentage - scoreDataB.percentage;
     });
     
-    console.log('📊 [Evaluation] Thèmes triés par score:', themes.map(theme => {
-      const score = typeof getScoreForTheme === 'function' ? getScoreForTheme(window.selectedLang, theme) : null;
-      return `${theme} (${score !== null ? score + '/10' : 'nouveau'})`;
+    console.log('📊 [Evaluation] Thèmes triés par performance:', themes.map(theme => {
+      const scoreData = getThemeScoreFormats(window.selectedLang, theme);
+      return scoreData ? 
+        `${theme} (${scoreData.percentage}% - ${scoreData.outOf10}/10)` : 
+        `${theme} (nouveau)`;
     }));
 
     // Stocke les thèmes cochés (persistant sur toute la sélection)
@@ -553,21 +737,21 @@ window.addEventListener('DOMContentLoaded', function() {
           card.theme && card.theme.trim() === theme
         ).length;
         
-        // Récupère la note du thème si disponible
-        const themeScore = typeof getScoreForTheme === 'function' ? 
-          getScoreForTheme(window.selectedLang, theme) : null;
+        // Récupère le score du thème avec différents formats
+        const themeScoreData = getThemeScoreFormats(window.selectedLang, theme);
         
         // Construit le tooltip avec mots + note
         let tooltipText = `${wordCount} mot${wordCount > 1 ? 's' : ''} dans ce thème`;
-        if (themeScore !== null) {
-          // Ajoute la note avec un emoji selon le niveau
+        if (themeScoreData !== null) {
+          // Ajoute la note avec un emoji selon le niveau (basé sur le pourcentage)
+          const percentage = themeScoreData.percentage;
           let scoreEmoji = '📖'; // Par défaut
-          if (themeScore >= 8) scoreEmoji = '🏆'; // Excellent
-          else if (themeScore >= 6) scoreEmoji = '⭐'; // Bon
-          else if (themeScore >= 4) scoreEmoji = '📈'; // En progression
+          if (percentage >= 80) scoreEmoji = '🏆'; // Excellent
+          else if (percentage >= 60) scoreEmoji = '⭐'; // Bon
+          else if (percentage >= 40) scoreEmoji = '📈'; // En progression
           else scoreEmoji = '💪'; // À travailler
           
-          tooltipText += `\n${scoreEmoji} Note: ${themeScore}/10`;
+          tooltipText += `\n${scoreEmoji} Performance: ${percentage}% (${themeScoreData.outOf10}/10)`;
         } else {
           tooltipText += '\n🆕 Nouveau thème (pas encore évalué)';
         }
@@ -580,22 +764,31 @@ window.addEventListener('DOMContentLoaded', function() {
         let displayText = ' ' + DOMUtils.escapeHtml(theme);
         let labelStyle = 'color: #333;'; // Style par défaut
         
-        if (themeScore !== null) {
+        if (themeScoreData !== null) {
+          const percentage = themeScoreData.percentage;
           let emoji = '📖';
-          if (themeScore >= 8) {
+          
+          // Utilise des seuils basés sur les pourcentages (plus cohérent)
+          if (percentage >= 80) {
             emoji = '🏆';
-            labelStyle = 'color: #22c55e; font-weight: 500;'; // Vert pour excellent
-          } else if (themeScore >= 6) {
+            labelStyle = 'color: #22c55e; font-weight: 500;'; // Vert pour excellent (80%+)
+          } else if (percentage >= 60) {
             emoji = '⭐';
-            labelStyle = 'color: #3b82f6; font-weight: 500;'; // Bleu pour bon
-          } else if (themeScore >= 4) {
+            labelStyle = 'color: #3b82f6; font-weight: 500;'; // Bleu pour bon (60%+)
+          } else if (percentage >= 40) {
             emoji = '📈';
-            labelStyle = 'color: #f59e0b; font-weight: 500;'; // Orange pour progression
+            labelStyle = 'color: #f59e0b; font-weight: 500;'; // Orange pour progression (40%+)
           } else {
             emoji = '💪';
-            labelStyle = 'color: #ef4444; font-weight: 500;'; // Rouge pour à travailler
+            labelStyle = 'color: #ef4444; font-weight: 500;'; // Rouge pour à travailler (<40%)
           }
-          displayText = ` ${emoji} ${DOMUtils.escapeHtml(theme)} (${themeScore}/10)`;
+          
+          // Affichage selon le mode sélectionné
+          if (displayAsPercentage) {
+            displayText = ` ${emoji} ${DOMUtils.escapeHtml(theme)} (${percentage}%)`;
+          } else {
+            displayText = ` ${emoji} ${DOMUtils.escapeHtml(theme)} (${themeScoreData.outOf10}/10)`;
+          }
         } else {
           displayText = ` 🆕 ${DOMUtils.escapeHtml(theme)} (nouveau)`;
           labelStyle = 'color: #6b7280; font-style: italic;'; // Gris pour nouveau
@@ -639,6 +832,17 @@ window.addEventListener('DOMContentLoaded', function() {
     // Affiche tous les thèmes au départ
     renderThemeCheckboxes(themes);
 
+    // Event listener pour basculer l'affichage des scores
+    scoreDisplayBtn.onclick = function() {
+      displayAsPercentage = !displayAsPercentage;
+      scoreDisplayBtn.textContent = displayAsPercentage ? '📊 % → /10' : '📊 /10 → %';
+      
+      // Re-rend les thèmes avec le nouveau format
+      const currentSearch = searchInput.value.trim().toLowerCase();
+      const filtered = themes.filter(theme => theme.toLowerCase().includes(currentSearch));
+      renderThemeCheckboxes(filtered);
+    };
+    
     // Filtre les thèmes à chaque saisie
     searchInput.oninput = function() {
       const search = searchInput.value.trim().toLowerCase();
@@ -1270,10 +1474,11 @@ function showEvaluationResults() {
     
     console.log(`📊 [Evaluation] Traitement de ${evaluationResults.length} résultats`);
     
-    // Calcule les statistiques avancées
+    // Calcule les statistiques avancées avec précision
     const totalQuestions = evaluationResults.length;
     const correctAnswers = evaluationResults.filter(r => r.isCorrect).length;
-    const scorePercent = Math.round((correctAnswers / totalQuestions) * 100);
+    const scorePercent = calculatePrecisePercentage(correctAnswers, totalQuestions, 2);
+    const preciseScorePercent = calculatePrecisePercentage(correctAnswers, totalQuestions, 4);
     
     console.log(`📈 [Evaluation] Score calculé: ${correctAnswers}/${totalQuestions} (${scorePercent}%)`);
     
@@ -1299,7 +1504,8 @@ function showEvaluationResults() {
       weightedPercentage: advancedScore.weightedPercentage,
       difficultyFactor: advancedScore.difficultyFactor,
       results: evaluationResults,
-      duration: evaluationStartTime ? Math.round((Date.now() - evaluationStartTime) / 1000) : null,
+      duration: evaluationStartTime ? formatPreciseScore((Date.now() - evaluationStartTime) / 1000, 2) : null,
+      durationMs: evaluationStartTime ? Date.now() - evaluationStartTime : null, // Durée précise en millisecondes
       averageResponseTime: evaluationResults.reduce((sum, r) => sum + (r.responseTime || 0), 0) / evaluationResults.length,
       themeBreakdown: themeBreakdown
     };
@@ -1325,15 +1531,37 @@ function showEvaluationResults() {
           </div>
           <div style="font-size: 1.6em; margin-bottom: 12px; color: #333;">Score : ${scorePercent}%</div>
           
-          <!-- Score pondéré -->
-          ${advancedScore.weightedPercentage !== scorePercent ? `
-          <div style="font-size: 1.2em; margin-bottom: 12px; color: #666; padding: 8px; background: rgba(102, 126, 234, 0.1); border-radius: 8px;">
-            📈 Score pondéré : ${advancedScore.weightedPercentage}%
-            <div style="font-size: 0.8em; margin-top: 4px;">
-              (Difficulté ${advancedScore.difficultyFactor}x - Mode ${window.selectedEvalMode === 'libre' ? 'Réponse libre' : 'QCM'})
+          <!-- Scores détaillés -->
+          <div style="font-size: 1em; margin-bottom: 16px; color: #666; background: rgba(102, 126, 234, 0.05); border-radius: 12px; padding: 16px;">
+            <div style="display: grid; gap: 8px; font-size: 0.9em;">
+              <div style="display: flex; justify-content: space-between;">
+                <span>� Score standard :</span>
+                <span><strong>${scorePercent}%</strong> (précis: ${preciseScorePercent}%)</span>
+              </div>
+              ${advancedScore.weightedPercentage !== scorePercent ? `
+              <div style="display: flex; justify-content: space-between;">
+                <span>📈 Score pondéré :</span>
+                <span><strong>${advancedScore.weightedPercentage}%</strong> (précis: ${advancedScore.preciseWeightedPercentage}%)</span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span>⚖️ Facteur difficulté :</span>
+                <span><strong>${advancedScore.difficultyFactor}x</strong></span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span>🎯 Score brut :</span>
+                <span><strong>${advancedScore.rawWeightedScore}</strong>/${advancedScore.rawMaxScore}</span>
+              </div>
+              ` : ''}
+              <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(102, 126, 234, 0.2); padding-top: 8px; margin-top: 8px;">
+                <span>⏱️ Durée totale :</span>
+                <span><strong>${sessionData.duration}s</strong> (${sessionData.durationMs}ms)</span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span>⚡ Temps moyen/question :</span>
+                <span><strong>${formatPreciseScore(sessionData.averageResponseTime / 1000, 2)}s</strong></span>
+              </div>
             </div>
           </div>
-          ` : ''}
           
           <div style="font-size: 1.1em; color: #666; margin-top: 16px;">
             ${scorePercent >= 80 ? '🎉 Excellent travail ! Maîtrise parfaite !' : 
@@ -1349,11 +1577,19 @@ function showEvaluationResults() {
           <h4 style="color: #333; margin-bottom: 16px; text-align: center;">📚 Performance par thème</h4>
           <div style="display: grid; gap: 12px; max-width: 500px; margin: 0 auto;">
             ${Object.entries(themeBreakdown).map(([theme, data]) => `
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: 8px; border-left: 4px solid ${data.percentage >= 70 ? '#28a745' : data.percentage >= 50 ? '#ffc107' : '#dc3545'};">
-                <span style="font-weight: 500;">${theme}</span>
-                <span style="color: ${data.percentage >= 70 ? '#28a745' : data.percentage >= 50 ? '#ffc107' : '#dc3545'}; font-weight: bold;">
-                  ${data.correct}/${data.total} (${data.percentage}%)
-                </span>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: white; border-radius: 8px; border-left: 4px solid ${data.percentage >= 70 ? '#28a745' : data.percentage >= 50 ? '#ffc107' : '#dc3545'}; margin-bottom: 4px;">
+                <div>
+                  <div style="font-weight: 500; margin-bottom: 2px;">${theme}</div>
+                  <div style="font-size: 0.8em; color: #666;">Précis: ${data.precisePercentage}%</div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="color: ${data.percentage >= 70 ? '#28a745' : data.percentage >= 50 ? '#ffc107' : '#dc3545'}; font-weight: bold;">
+                    ${data.correct}/${data.total}
+                  </div>
+                  <div style="color: ${data.percentage >= 70 ? '#28a745' : data.percentage >= 50 ? '#ffc107' : '#dc3545'}; font-size: 0.9em;">
+                    ${data.percentage}%
+                  </div>
+                </div>
               </div>
             `).join('')}
           </div>
@@ -1391,13 +1627,16 @@ function showEvaluationResults() {
       ` : ''}
       
       <div style="text-align: center;">
-        <button id="restartEvalBtn" class="main-btn" style="margin-right: 12px; background: #007bff;">
+        <button id="restartEvalBtn" class="main-btn" style="margin: 6px; background: #007bff;">
           🔄 Recommencer avec les mêmes paramètres
         </button>
-        <button id="newEvalBtn" class="main-btn" style="margin-right: 12px; background: #28a745;">
+        <button id="newEvalBtn" class="main-btn" style="margin: 6px; background: #28a745;">
           ⚙️ Nouvelle évaluation
         </button>
-        <button id="backToMenuBtn" class="main-btn" style="background: #6c757d;">
+        <button id="exportStatsBtn" class="main-btn" style="margin: 6px; background: #17a2b8;">
+          📈 Exporter statistiques détaillées
+        </button>
+        <button id="backToMenuBtn" class="main-btn" style="margin: 6px; background: #6c757d;">
           🏠 Retour au menu
         </button>
       </div>
@@ -1419,6 +1658,10 @@ function showEvaluationResults() {
       window.selectedThemes = null;
       window.selectedQuestionCount = null;
       location.reload();
+    };
+    
+    document.getElementById('exportStatsBtn').onclick = function() {
+      exportDetailedStatistics(sessionData, advancedScore, themeBreakdown);
     };
     
     document.getElementById('backToMenuBtn').onclick = function() {
@@ -1749,6 +1992,106 @@ function cancelEvaluation() {
 }
 
 /**
+ * Exporte les statistiques détaillées de l'évaluation
+ * @param {Object} sessionData - Données de session
+ * @param {Object} advancedScore - Scores avancés
+ * @param {Object} themeBreakdown - Répartition par thème
+ */
+function exportDetailedStatistics(sessionData, advancedScore, themeBreakdown) {
+  try {
+    const exportData = {
+      // Métadonnées de l'évaluation
+      evaluation: {
+        timestamp: new Date().toISOString(),
+        sessionId: sessionData.sessionId || 'N/A',
+        language: sessionData.language,
+        mode: sessionData.mode,
+        themes: sessionData.themes,
+        totalQuestions: sessionData.totalQuestions
+      },
+      
+      // Scores précis
+      scores: {
+        standard: {
+          correct: sessionData.correctAnswers,
+          total: sessionData.totalQuestions,
+          percentage: calculatePrecisePercentage(sessionData.correctAnswers, sessionData.totalQuestions, 4),
+          displayPercentage: calculatePrecisePercentage(sessionData.correctAnswers, sessionData.totalQuestions, 2)
+        },
+        weighted: {
+          score: advancedScore.rawWeightedScore,
+          maxScore: advancedScore.rawMaxScore,
+          percentage: advancedScore.preciseWeightedPercentage,
+          displayPercentage: advancedScore.weightedPercentage,
+          difficultyFactor: advancedScore.difficultyFactor
+        }
+      },
+      
+      // Métriques temporelles précises
+      timing: {
+        durationSeconds: sessionData.duration,
+        durationMs: sessionData.durationMs,
+        averageResponseTimeMs: formatPreciseScore(sessionData.averageResponseTime, 3),
+        averageResponseTimeSeconds: formatPreciseScore(sessionData.averageResponseTime / 1000, 3)
+      },
+      
+      // Répartition par thème avec précision maximale
+      themeBreakdown: Object.entries(themeBreakdown).map(([theme, data]) => ({
+        theme: theme,
+        correct: data.correct,
+        total: data.total,
+        percentage: data.precisePercentage,
+        displayPercentage: data.percentage
+      })),
+      
+      // Détail de chaque question
+      questionDetails: sessionData.results.map((result, index) => ({
+        questionNumber: index + 1,
+        question: result.question.fr,
+        answer: result.question[sessionData.language === 'anglais' ? 'en' : sessionData.language],
+        theme: result.question.theme,
+        userAnswer: result.userAnswer,
+        correctAnswer: result.correctAnswer,
+        isCorrect: result.isCorrect,
+        responseTimeMs: result.responseTime,
+        responseTimeSeconds: result.responseTime ? formatPreciseScore(result.responseTime / 1000, 3) : null
+      }))
+    };
+    
+    // Génère le nom de fichier avec timestamp précis
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `evaluation-stats-${sessionData.language}-${timestamp}.json`;
+    
+    // Crée et télécharge le fichier
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    
+    const downloadLink = document.createElement('a');
+    downloadLink.href = URL.createObjectURL(dataBlob);
+    downloadLink.download = filename;
+    downloadLink.style.display = 'none';
+    
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    
+    // Affiche un message de confirmation
+    DOMUtils.createModal({
+      title: '📈 Export réussi',
+      content: `Statistiques détaillées exportées dans le fichier :<br><strong>${filename}</strong><br><br>Le fichier contient tous les scores précis et métriques détaillées pour un suivi optimal de vos progrès.`,
+      type: 'success',
+      closeButton: true
+    });
+    
+    console.log('✅ [Export] Statistiques exportées:', filename);
+    
+  } catch (error) {
+    console.error('❌ [Export] Erreur lors de l\'export:', error);
+    alert('Erreur lors de l\'export des statistiques. Vérifiez la console pour plus de détails.');
+  }
+}
+
+/**
  * Affiche les informations de stockage pour debug et monitoring
  */
 function showStorageInfo() {
@@ -1807,6 +2150,69 @@ function showPerformanceDashboard() {
 }
 
 /**
+ * Migre les anciens scores vers des scores précis
+ * Cette fonction s'assure que tous les scores stockés utilisent la nouvelle précision
+ */
+function migrateScoresToPrecision() {
+  try {
+    const history = getEvaluationHistory();
+    let migrationCount = 0;
+    
+    const migratedHistory = history.map(session => {
+      let needsMigration = false;
+      
+      // Vérifie si des scores précis manquent
+      if (session.results && (!session.precisePercentage || !session.preciseWeightedPercentage)) {
+        
+        // Recalcule les scores précis à partir des données brutes
+        const correctAnswers = session.results.filter(r => r.isCorrect).length;
+        const totalQuestions = session.results.length;
+        
+        session.precisePercentage = calculatePrecisePercentage(correctAnswers, totalQuestions, 4);
+        session.preciseStandardPercentage = calculatePrecisePercentage(correctAnswers, totalQuestions, 4);
+        
+        // Recalcule le score pondéré si possible
+        if (session.mode && session.results) {
+          const advancedScore = calculateAdvancedScore(session.results, session.mode);
+          session.preciseWeightedPercentage = advancedScore.preciseWeightedPercentage;
+          session.rawWeightedScore = advancedScore.rawWeightedScore;
+          session.rawMaxScore = advancedScore.rawMaxScore;
+        }
+        
+        // Recalcule les breakdown de thèmes avec précision
+        if (session.themeBreakdown) {
+          Object.keys(session.themeBreakdown).forEach(theme => {
+            const data = session.themeBreakdown[theme];
+            if (!data.precisePercentage) {
+              data.precisePercentage = calculatePrecisePercentage(data.correct, data.total, 4);
+            }
+          });
+        }
+        
+        needsMigration = true;
+        migrationCount++;
+      }
+      
+      return session;
+    });
+    
+    // Sauvegarde la version migrée
+    if (migrationCount > 0) {
+      localStorage.setItem(EVALUATION_HISTORY_KEY, JSON.stringify(migratedHistory));
+      console.log(`✅ [Migration] ${migrationCount} sessions migrées vers la nouvelle précision`);
+    } else {
+      console.log('ℹ️ [Migration] Aucune migration nécessaire, tous les scores sont déjà précis');
+    }
+    
+    return migrationCount;
+    
+  } catch (error) {
+    console.error('❌ [Migration] Erreur lors de la migration:', error);
+    return 0;
+  }
+}
+
+/**
  * Test de diagnostic pour les fonctions critiques
  */
 function runDiagnosticTests() {
@@ -1842,6 +2248,20 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Délai pour laisser le temps aux autres scripts de se charger
   setTimeout(() => {
+    // Migration des scores de thèmes vers la nouvelle précision (revision.js)
+    if (typeof migrateToPreciseScores === 'function') {
+      const migratedThemeCount = migrateToPreciseScores();
+      if (migratedThemeCount > 0) {
+        console.log(`🔄 [Evaluation] ${migratedThemeCount} scores de thèmes migrés vers la nouvelle précision`);
+      }
+    }
+    
+    // Migration des scores d'évaluation vers la nouvelle précision
+    const migratedCount = migrateScoresToPrecision();
+    if (migratedCount > 0) {
+      console.log(`🔄 [Evaluation] ${migratedCount} sessions d'évaluation migrées vers la nouvelle précision`);
+    }
+    
     // Performance et stockage
     showStorageInfo();
     showPerformanceDashboard();

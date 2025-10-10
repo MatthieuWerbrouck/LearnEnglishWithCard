@@ -91,9 +91,10 @@ function updateScoreForTheme(lang, theme, isGood) {
     scores[key].history = scores[key].history.slice(-20);
   }
   
-    // Calcule la note sur les 20 dernières réponses
+    // Calcule la note sur les 20 dernières réponses avec précision
     const sum = scores[key].history.reduce((a, b) => a + b, 0);
-    scores[key].score = Math.round((sum / scores[key].history.length) * 10);
+    // Conserve 3 décimales pour plus de précision dans le calcul
+    scores[key].score = Math.round((sum / scores[key].history.length) * 10 * 1000) / 1000;
     
     setThemeScores(scores);
     console.log(`📊 Score mis à jour pour ${theme}: ${scores[key].score}/10`);
@@ -114,6 +115,60 @@ function updateScoreForTheme(lang, theme, isGood) {
     } catch (fallbackError) {
       console.error('❌ [Revision] Erreur critique scores:', fallbackError);
     }
+  }
+}
+
+/**
+ * Migre les anciens scores arrondis vers des scores précis
+ * Recalcule tous les scores existants avec la nouvelle précision
+ */
+function migrateToPreciseScores() {
+  try {
+    const scores = getThemeScores();
+    if (!scores || typeof scores !== 'object') {
+      console.log('ℹ️ [Migration] Aucun score à migrer');
+      return 0;
+    }
+    
+    let migratedCount = 0;
+    
+    Object.keys(scores).forEach(key => {
+      const themeData = scores[key];
+      
+      // Vérifie si c'est un ancien score arrondi (nombre entier)
+      if (themeData && 
+          themeData.history && 
+          Array.isArray(themeData.history) && 
+          typeof themeData.score === 'number' &&
+          themeData.score === Math.round(themeData.score)) {
+        
+        // Recalcule le score avec précision
+        const sum = themeData.history.reduce((a, b) => a + b, 0);
+        const oldScore = themeData.score;
+        const newScore = Math.round((sum / themeData.history.length) * 10 * 1000) / 1000;
+        
+        // Ne met à jour que si il y a une différence significative
+        if (Math.abs(newScore - oldScore) > 0.001) {
+          themeData.score = newScore;
+          migratedCount++;
+          
+          console.log(`🔄 [Migration] ${key}: ${oldScore}/10 → ${newScore}/10`);
+        }
+      }
+    });
+    
+    if (migratedCount > 0) {
+      setThemeScores(scores);
+      console.log(`✅ [Migration] ${migratedCount} scores migrés vers la nouvelle précision`);
+    } else {
+      console.log('ℹ️ [Migration] Aucun score nécessitant une migration trouvé');
+    }
+    
+    return migratedCount;
+    
+  } catch (error) {
+    console.error('❌ [Migration] Erreur lors de la migration:', error);
+    return 0;
   }
 }
 

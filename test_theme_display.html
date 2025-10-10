@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Affichage Scores Thèmes - LearnEnglishWithCard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border-left: 4px solid #007bff;
+    }
+    .result {
+      font-family: monospace;
+      background: #e9ecef;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 5px 0;
+    }
+    .score-display {
+      display: inline-block;
+      margin: 4px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+    }
+    .excellent { background: #d4edda; color: #155724; }
+    .good { background: #cce7ff; color: #003d82; }
+    .progress { background: #fff3cd; color: #856404; }
+    .needs-work { background: #f8d7da; color: #721c24; }
+    .new { background: #e2e3e5; color: #383d41; font-style: italic; }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📊 Test d'Affichage des Scores de Thèmes</h1>
+    <p>Cette page teste les nouvelles fonctions d'affichage des scores en pourcentage vs sur 10.</p>
+    
+    <div class="test-section">
+      <h3>🔧 Test des Fonctions de Conversion</h3>
+      <button onclick="testScoreConversion()">Tester les conversions de score</button>
+      <div id="conversionResults"></div>
+    </div>
+    
+    <div class="test-section">
+      <h3>🎨 Aperçu des Styles par Catégorie</h3>
+      <button onclick="showStylePreview()">Afficher l'aperçu des styles</button>
+      <div id="stylePreview"></div>
+    </div>
+    
+    <div class="test-section">
+      <h3>📈 Simulation d'Affichage de Thèmes</h3>
+      <button onclick="simulateThemeDisplay()">Simuler l'affichage des thèmes</button>
+      <button id="toggleDisplayBtn" onclick="toggleDisplay()" style="background: #28a745;">📊 % → /10</button>
+      <div id="themeSimulation"></div>
+    </div>
+    
+    <div class="test-section">
+      <h3>📋 Comparaison Avant/Après</h3>
+      <div class="result">
+        <strong>🔄 Améliorations apportées :</strong><br>
+        • <strong>Avant :</strong> Affichage uniquement sur 10 (ex: "Animaux (7.2/10)")<br>
+        • <strong>Maintenant :</strong> Affichage en pourcentage par défaut (ex: "🏆 Animaux (72%)")<br>
+        • <strong>Bouton de basculement :</strong> Permet de switcher entre % et /10<br>
+        • <strong>Tooltip enrichi :</strong> Montre les deux formats (ex: "72% (7.2/10)")<br>
+        • <strong>Seuils cohérents :</strong> Basés sur des pourcentages standards (80%, 60%, 40%)<br>
+        • <strong>Légende visuelle :</strong> Clarification des niveaux de performance
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Simulation des fonctions d'evaluation.js
+    function formatPreciseScore(value, precision = 2) {
+      if (typeof value !== 'number' || isNaN(value)) return 0;
+      return Math.round(value * Math.pow(10, precision)) / Math.pow(10, precision);
+    }
+
+    function scoreToPercentage(score, precision = 1) {
+      if (score === null || score === undefined || typeof score !== 'number') return null;
+      return formatPreciseScore((score / 10) * 100, precision);
+    }
+
+    function getThemeScoreFormats(rawScore) {
+      if (rawScore === null) return null;
+      
+      return {
+        raw: rawScore,
+        outOf10: formatPreciseScore(rawScore, 1),
+        percentage: scoreToPercentage(rawScore, 1),
+        precisePercentage: scoreToPercentage(rawScore, 2)
+      };
+    }
+
+    // Variable globale pour le mode d'affichage
+    let displayAsPercentage = true;
+
+    function testScoreConversion() {
+      const results = document.getElementById('conversionResults');
+      results.innerHTML = '';
+      
+      const testScores = [0, 2.5, 4.7, 6.2, 7.8, 8.9, 10];
+      
+      testScores.forEach(score => {
+        const formats = getThemeScoreFormats(score);
+        results.innerHTML += `<div class="result">
+          <strong>Score brut:</strong> ${score}/10<br>
+          <strong>Pourcentage:</strong> ${formats.percentage}%<br>
+          <strong>Pourcentage précis:</strong> ${formats.precisePercentage}%<br>
+          <strong>Formaté /10:</strong> ${formats.outOf10}/10
+        </div>`;
+      });
+    }
+
+    function showStylePreview() {
+      const preview = document.getElementById('stylePreview');
+      preview.innerHTML = '';
+      
+      const categories = [
+        { name: 'Excellent', score: 9.2, class: 'excellent', emoji: '🏆' },
+        { name: 'Bon', score: 7.1, class: 'good', emoji: '⭐' },
+        { name: 'En progression', score: 5.3, class: 'progress', emoji: '📈' },
+        { name: 'À travailler', score: 2.7, class: 'needs-work', emoji: '💪' },
+        { name: 'Nouveau', score: null, class: 'new', emoji: '🆕' }
+      ];
+      
+      categories.forEach(cat => {
+        const formats = cat.score !== null ? getThemeScoreFormats(cat.score) : null;
+        
+        preview.innerHTML += `<div class="score-display ${cat.class}">
+          ${cat.emoji} ${cat.name} ${formats ? 
+            `(${formats.percentage}% | ${formats.outOf10}/10)` : 
+            '(nouveau)'
+          }
+        </div>`;
+      });
+    }
+
+    function simulateThemeDisplay() {
+      const simulation = document.getElementById('themeSimulation');
+      simulation.innerHTML = '';
+      
+      // Données simulées de thèmes avec scores variés
+      const mockThemes = [
+        { name: 'Animaux', score: 9.2 },
+        { name: 'Nourriture', score: 7.8 },
+        { name: 'Transport', score: 6.1 },
+        { name: 'Couleurs', score: 4.3 },
+        { name: 'Famille', score: 2.7 },
+        { name: 'Métiers', score: null }
+      ];
+      
+      // Trie par score croissant (comme dans l'application)
+      mockThemes.sort((a, b) => {
+        if (a.score === null && b.score === null) return 0;
+        if (a.score === null) return -1;
+        if (b.score === null) return 1;
+        return a.score - b.score;
+      });
+      
+      simulation.innerHTML = '<h4>Ordre de priorité pour révision (score faible en premier) :</h4>';
+      
+      mockThemes.forEach((theme, index) => {
+        const formats = theme.score !== null ? getThemeScoreFormats(theme.score) : null;
+        let emoji = '🆕';
+        let className = 'new';
+        let displayScore = 'nouveau';
+        
+        if (formats) {
+          const percentage = formats.percentage;
+          if (percentage >= 80) {
+            emoji = '🏆';
+            className = 'excellent';
+          } else if (percentage >= 60) {
+            emoji = '⭐';
+            className = 'good';
+          } else if (percentage >= 40) {
+            emoji = '📈';
+            className = 'progress';
+          } else {
+            emoji = '💪';
+            className = 'needs-work';
+          }
+          
+          displayScore = displayAsPercentage ? 
+            `${formats.percentage}%` : 
+            `${formats.outOf10}/10`;
+        }
+        
+        simulation.innerHTML += `<div class="score-display ${className}" style="display: block; margin: 4px 0;">
+          ${index + 1}. ${emoji} ${theme.name} (${displayScore})
+        </div>`;
+      });
+    }
+
+    function toggleDisplay() {
+      displayAsPercentage = !displayAsPercentage;
+      const btn = document.getElementById('toggleDisplayBtn');
+      btn.textContent = displayAsPercentage ? '📊 % → /10' : '📊 /10 → %';
+      
+      // Re-simule l'affichage
+      simulateThemeDisplay();
+    }
+
+    // Auto-test au chargement
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('📊 Page de test de l\'affichage des scores chargée');
+      showStylePreview();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Scores Précis - LearnEnglishWithCard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border-left: 4px solid #007bff;
+    }
+    .result {
+      font-family: monospace;
+      background: #e9ecef;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 5px 0;
+    }
+    .success { border-left-color: #28a745; }
+    .warning { border-left-color: #ffc107; }
+    .error { border-left-color: #dc3545; }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧮 Test des Scores Précis</h1>
+    <p>Cette page teste les nouvelles fonctions de calcul de scores précis pour l'application LearnEnglishWithCard.</p>
+    
+    <div class="test-section success">
+      <h3>📊 Test des Fonctions de Précision</h3>
+      <button onclick="testPrecisionFunctions()">Tester les fonctions de précision</button>
+      <div id="precisionResults"></div>
+    </div>
+    
+    <div class="test-section warning">
+      <h3>📈 Test des Calculs de Pourcentage</h3>
+      <button onclick="testPercentageCalculations()">Tester les calculs de pourcentage</button>
+      <div id="percentageResults"></div>
+    </div>
+    
+    <div class="test-section">
+      <h3>⚖️ Test des Scores Pondérés</h3>
+      <button onclick="testWeightedScores()">Tester les scores pondérés</button>
+      <div id="weightedResults"></div>
+    </div>
+    
+    <div class="test-section">
+      <h3>🎯 Test de Comparaison</h3>
+      <button onclick="compareOldVsNew()">Comparer ancien vs nouveau système</button>
+      <div id="comparisonResults"></div>
+    </div>
+    
+    <div class="test-section">
+      <h3>📋 Informations Générales</h3>
+      <div class="result">
+        <strong>Améliorations apportées :</strong><br>
+        • Scores avec 2 décimales pour l'affichage (ex: 87.25%)<br>
+        • Scores avec 4 décimales pour les analytics (ex: 87.2534%)<br>
+        • Conservation des valeurs brutes non arrondies<br>
+        • Export détaillé des statistiques précises<br>
+        • Migration automatique des anciens scores<br>
+        • Comparaison temporelle de progression précise
+      </div>
+    </div>
+  </div>
+
+  <script src="dom-utils.js"></script>
+  <script>
+    // Réimplémentation des fonctions de test
+    function formatPreciseScore(value, precision = 2) {
+      if (typeof value !== 'number' || isNaN(value)) return 0;
+      return Math.round(value * Math.pow(10, precision)) / Math.pow(10, precision);
+    }
+
+    function calculatePrecisePercentage(numerator, denominator, precision = 2) {
+      if (!denominator || denominator === 0) return 0;
+      const percentage = (numerator / denominator) * 100;
+      return formatPreciseScore(percentage, precision);
+    }
+
+    function testPrecisionFunctions() {
+      const results = document.getElementById('precisionResults');
+      results.innerHTML = '';
+      
+      const tests = [
+        { value: 87.256789, precision: 2, expected: 87.26 },
+        { value: 87.254321, precision: 2, expected: 87.25 },
+        { value: 87.256789, precision: 4, expected: 87.2568 },
+        { value: 0.123456789, precision: 3, expected: 0.123 },
+        { value: 99.999999, precision: 2, expected: 100 },
+      ];
+      
+      tests.forEach((test, index) => {
+        const result = formatPreciseScore(test.value, test.precision);
+        const success = result === test.expected;
+        results.innerHTML += `<div class="result">
+          Test ${index + 1}: formatPreciseScore(${test.value}, ${test.precision})<br>
+          Résultat: ${result} | Attendu: ${test.expected} | ${success ? '✅' : '❌'}
+        </div>`;
+      });
+    }
+
+    function testPercentageCalculations() {
+      const results = document.getElementById('percentageResults');
+      results.innerHTML = '';
+      
+      const tests = [
+        { numerator: 87, denominator: 100, precision: 2, expected: 87 },
+        { numerator: 17, denominator: 23, precision: 2, expected: 73.91 },
+        { numerator: 17, denominator: 23, precision: 4, expected: 73.9130 },
+        { numerator: 2, denominator: 3, precision: 2, expected: 66.67 },
+        { numerator: 1, denominator: 3, precision: 6, expected: 33.333333 },
+      ];
+      
+      tests.forEach((test, index) => {
+        const result = calculatePrecisePercentage(test.numerator, test.denominator, test.precision);
+        const success = result === test.expected;
+        results.innerHTML += `<div class="result">
+          Test ${index + 1}: ${test.numerator}/${test.denominator} avec ${test.precision} décimales<br>
+          Résultat: ${result}% | Attendu: ${test.expected}% | ${success ? '✅' : '❌'}
+        </div>`;
+      });
+    }
+
+    function testWeightedScores() {
+      const results = document.getElementById('weightedResults');
+      results.innerHTML = '';
+      
+      // Simulation de calculs de scores pondérés
+      const mockResults = [
+        { isCorrect: true, mode: 'qcm_fr_lang' },
+        { isCorrect: false, mode: 'qcm_fr_lang' },
+        { isCorrect: true, mode: 'libre' },
+        { isCorrect: true, mode: 'qcm_lang_fr' }
+      ];
+      
+      let totalWeightedPoints = 0;
+      let totalPossiblePoints = 0;
+      
+      mockResults.forEach(result => {
+        let weight = 1.0;
+        switch(result.mode) {
+          case 'libre':
+            weight = 1.5;
+            break;
+          case 'qcm_fr_lang':
+            weight = 1.2;
+            break;
+          case 'qcm_lang_fr':
+            weight = 1.0;
+            break;
+        }
+        
+        const questionPoints = result.isCorrect ? weight : 0;
+        totalWeightedPoints += questionPoints;
+        totalPossiblePoints += weight;
+      });
+      
+      const weightedPercentage = calculatePrecisePercentage(totalWeightedPoints, totalPossiblePoints, 2);
+      const preciseWeightedPercentage = calculatePrecisePercentage(totalWeightedPoints, totalPossiblePoints, 4);
+      
+      results.innerHTML = `
+        <div class="result">
+          <strong>Calcul du Score Pondéré :</strong><br>
+          Points pondérés obtenus: ${formatPreciseScore(totalWeightedPoints, 3)}<br>
+          Points pondérés maximum: ${formatPreciseScore(totalPossiblePoints, 3)}<br>
+          Pourcentage pondéré (affichage): ${weightedPercentage}%<br>
+          Pourcentage pondéré (précis): ${preciseWeightedPercentage}%<br>
+          Facteur de difficulté: ${formatPreciseScore(totalPossiblePoints / mockResults.length, 3)}x
+        </div>
+      `;
+    }
+
+    function compareOldVsNew() {
+      const results = document.getElementById('comparisonResults');
+      results.innerHTML = '';
+      
+      const testCases = [
+        { correct: 17, total: 23 },
+        { correct: 7, total: 9 },
+        { correct: 156, total: 200 },
+        { correct: 1, total: 3 }
+      ];
+      
+      testCases.forEach((test, index) => {
+        // Ancien système (arrondi immédiat)
+        const oldPercentage = Math.round((test.correct / test.total) * 100);
+        
+        // Nouveau système (précision)
+        const newPercentage = calculatePrecisePercentage(test.correct, test.total, 2);
+        const precisePercentage = calculatePrecisePercentage(test.correct, test.total, 4);
+        
+        const difference = Math.abs(oldPercentage - newPercentage);
+        
+        results.innerHTML += `<div class="result">
+          <strong>Test ${index + 1}: ${test.correct}/${test.total}</strong><br>
+          Ancien système: ${oldPercentage}%<br>
+          Nouveau système (affichage): ${newPercentage}%<br>
+          Nouveau système (précis): ${precisePercentage}%<br>
+          Différence: ${formatPreciseScore(difference, 2)} points<br>
+          ${difference > 0.5 ? '⚠️ Différence significative' : '✅ Différence mineure'}
+        </div>`;
+      });
+    }
+    
+    // Auto-test au chargement
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('🧮 Page de test des scores précis chargée');
+      console.log('Utilisez les boutons pour tester les différentes fonctions');
+    });
+  </script>
+</body>
+</html>

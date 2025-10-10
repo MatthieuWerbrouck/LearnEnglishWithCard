@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Scores Précis vs Arrondis - LearnEnglishWithCard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border-left: 4px solid #007bff;
+    }
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 15px 0;
+    }
+    .old-system, .new-system {
+      padding: 15px;
+      border-radius: 8px;
+    }
+    .old-system {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+    }
+    .new-system {
+      background: #d4edda;
+      border: 2px solid #28a745;
+    }
+    .score-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+      padding: 6px;
+      background: rgba(255,255,255,0.7);
+      border-radius: 4px;
+    }
+    .precision-loss {
+      background: #f8d7da !important;
+      color: #721c24;
+      font-weight: bold;
+    }
+    .precision-gain {
+      background: #d1ecf1 !important;
+      color: #0c5460;
+      font-weight: bold;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .highlight {
+      background: yellow;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎯 Test Scores Précis vs Arrondis</h1>
+    <p>Cette page démontre la différence entre l'ancien système d'arrondissement et le nouveau système de scores précis.</p>
+    
+    <div class="test-section">
+      <h3>🧮 Simulation de Calculs de Scores</h3>
+      <button onclick="simulateScoreCalculations()">Simuler les calculs</button>
+      <div id="calculationResults"></div>
+    </div>
+    
+    <div class="test-section">
+      <h3>📊 Comparaison Visuelle</h3>
+      <button onclick="showVisualComparison()">Afficher la comparaison</button>
+      <div id="visualComparison"></div>
+    </div>
+    
+    <div class="test-section">
+      <h3>📈 Impact sur l'Affichage des Thèmes</h3>
+      <button onclick="showThemeDisplayImpact()">Montrer l'impact</button>
+      <div id="themeDisplayImpact"></div>
+    </div>
+    
+    <div class="test-section">
+      <h3>📋 Résumé des Améliorations</h3>
+      <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; border-left: 4px solid #0066cc;">
+        <h4>🔧 Problème identifié :</h4>
+        <p>• Les scores étaient arrondis trop tôt avec <code class="highlight">Math.round()</code></p>
+        <p>• Perte de précision : 7.235/10 → 7/10 → 70% au lieu de 72.35%</p>
+        <p>• Affichage imprécis des performances réelles</p>
+        
+        <h4>✅ Solutions apportées :</h4>
+        <p>• <strong>revision.js :</strong> Conservation de 3 décimales dans le calcul des scores</p>
+        <p>• <strong>evaluation.js :</strong> Affichage avec 2 décimales par défaut (72.35%)</p>
+        <p>• <strong>Migration automatique :</strong> Recalcul des anciens scores avec précision</p>
+        <p>• <strong>Double format :</strong> Pourcentage précis + note sur 10 précise</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Simulation de l'ancien système (arrondi)
+    function calculateOldScore(history) {
+      const sum = history.reduce((a, b) => a + b, 0);
+      return Math.round((sum / history.length) * 10); // Arrondi brutal
+    }
+
+    // Simulation du nouveau système (précis)
+    function calculateNewScore(history) {
+      const sum = history.reduce((a, b) => a + b, 0);
+      return Math.round((sum / history.length) * 10 * 1000) / 1000; // 3 décimales
+    }
+
+    // Conversion en pourcentage (ancien)
+    function oldPercentage(score) {
+      return Math.round((score / 10) * 100); // 1 décimale
+    }
+
+    // Conversion en pourcentage (nouveau)
+    function newPercentage(score) {
+      return Math.round((score / 10) * 100 * 100) / 100; // 2 décimales
+    }
+
+    function simulateScoreCalculations() {
+      const results = document.getElementById('calculationResults');
+      results.innerHTML = '';
+      
+      // Différents historiques de réponses
+      const testCases = [
+        { name: 'Cas 1 (17/23 bonnes)', history: [1,1,1,0,1,1,0,1,1,1,0,1,1,1,0,1,1,0,1,1,0,1,1] },
+        { name: 'Cas 2 (13/17 bonnes)', history: [1,0,1,1,1,0,1,1,0,1,1,1,1,0,1,1,1] },
+        { name: 'Cas 3 (7/9 bonnes)', history: [1,1,0,1,1,1,0,1,1] },
+        { name: 'Cas 4 (5/8 bonnes)', history: [1,0,1,0,1,1,1,0] }
+      ];
+      
+      results.innerHTML = '<div class="comparison">';
+      results.innerHTML += '<div class="old-system"><h4>📊 Ancien Système (Arrondi)</h4></div>';
+      results.innerHTML += '<div class="new-system"><h4>🎯 Nouveau Système (Précis)</h4></div>';
+      results.innerHTML += '</div>';
+      
+      testCases.forEach(testCase => {
+        const oldScore = calculateOldScore(testCase.history);
+        const newScore = calculateNewScore(testCase.history);
+        const oldPercent = oldPercentage(oldScore);
+        const newPercent = newPercentage(newScore);
+        
+        const precisionLoss = Math.abs(newPercent - oldPercent) > 1;
+        
+        const comparisonDiv = document.createElement('div');
+        comparisonDiv.className = 'comparison';
+        
+        comparisonDiv.innerHTML = `
+          <div class="old-system">
+            <div class="score-row ${precisionLoss ? 'precision-loss' : ''}">
+              <span><strong>${testCase.name}</strong></span>
+              <span>${oldScore}/10</span>
+            </div>
+            <div class="score-row">
+              <span>Pourcentage:</span>
+              <span>${oldPercent}%</span>
+            </div>
+          </div>
+          <div class="new-system">
+            <div class="score-row ${precisionLoss ? 'precision-gain' : ''}">
+              <span><strong>${testCase.name}</strong></span>
+              <span>${newScore}/10</span>
+            </div>
+            <div class="score-row">
+              <span>Pourcentage:</span>
+              <span>${newPercent}%</span>
+            </div>
+          </div>
+        `;
+        
+        results.appendChild(comparisonDiv);
+        
+        if (precisionLoss) {
+          const lossDiv = document.createElement('div');
+          lossDiv.style.textAlign = 'center';
+          lossDiv.style.color = '#dc3545';
+          lossDiv.style.fontWeight = 'bold';
+          lossDiv.style.margin = '5px 0 15px 0';
+          lossDiv.innerHTML = `⚠️ Écart de ${Math.abs(newPercent - oldPercent).toFixed(2)} points de pourcentage !`;
+          results.appendChild(lossDiv);
+        }
+      });
+    }
+
+    function showVisualComparison() {
+      const comparison = document.getElementById('visualComparison');
+      comparison.innerHTML = '';
+      
+      const examples = [
+        { 
+          name: 'Thème "Animaux"', 
+          correctAnswers: 17, 
+          totalAnswers: 23,
+          description: '17 bonnes réponses sur 23'
+        },
+        { 
+          name: 'Thème "Transport"', 
+          correctAnswers: 13, 
+          totalAnswers: 18,
+          description: '13 bonnes réponses sur 18'
+        }
+      ];
+      
+      examples.forEach(example => {
+        const rate = example.correctAnswers / example.totalAnswers;
+        const oldScore = Math.round(rate * 10);
+        const newScore = Math.round(rate * 10 * 1000) / 1000;
+        const oldPercent = Math.round((oldScore / 10) * 100);
+        const newPercent = Math.round((newScore / 10) * 100 * 100) / 100;
+        
+        const exampleDiv = document.createElement('div');
+        exampleDiv.className = 'comparison';
+        exampleDiv.innerHTML = `
+          <div class="old-system">
+            <h5>${example.name} - Ancien</h5>
+            <div>Performance: ${example.description}</div>
+            <div>Score arrondi: ${oldScore}/10</div>
+            <div>Affichage: <strong>${oldPercent}%</strong></div>
+          </div>
+          <div class="new-system">
+            <h5>${example.name} - Nouveau</h5>
+            <div>Performance: ${example.description}</div>
+            <div>Score précis: ${newScore}/10</div>
+            <div>Affichage: <strong>${newPercent}%</strong></div>
+          </div>
+        `;
+        
+        comparison.appendChild(exampleDiv);
+      });
+    }
+
+    function showThemeDisplayImpact() {
+      const impact = document.getElementById('themeDisplayImpact');
+      impact.innerHTML = '';
+      
+      const mockThemes = [
+        { name: 'Animaux', score: 7.391 },
+        { name: 'Couleurs', score: 6.222 },
+        { name: 'Transport', score: 5.875 },
+        { name: 'Nourriture', score: 4.105 }
+      ];
+      
+      impact.innerHTML = '<div class="comparison">';
+      impact.innerHTML += '<div class="old-system"><h4>🔴 Ancien Affichage</h4></div>';
+      impact.innerHTML += '<div class="new-system"><h4>🟢 Nouvel Affichage</h4></div>';
+      impact.innerHTML += '</div>';
+      
+      mockThemes.forEach(theme => {
+        const oldRounded = Math.round(theme.score);
+        const newPrecise = Math.round(theme.score * 100) / 100;
+        
+        const oldPercent = Math.round((oldRounded / 10) * 100);
+        const newPercent = Math.round((theme.score / 10) * 100 * 100) / 100;
+        
+        const themeDiv = document.createElement('div');
+        themeDiv.className = 'comparison';
+        
+        let oldEmoji = '📖';
+        if (oldPercent >= 80) oldEmoji = '🏆';
+        else if (oldPercent >= 60) oldEmoji = '⭐';
+        else if (oldPercent >= 40) oldEmoji = '📈';
+        else oldEmoji = '💪';
+        
+        let newEmoji = '📖';
+        if (newPercent >= 80) newEmoji = '🏆';
+        else if (newPercent >= 60) newEmoji = '⭐';
+        else if (newPercent >= 40) newEmoji = '📈';
+        else newEmoji = '💪';
+        
+        const emojiChanged = oldEmoji !== newEmoji;
+        
+        themeDiv.innerHTML = `
+          <div class="old-system">
+            <div class="score-row ${emojiChanged ? 'precision-loss' : ''}">
+              ${oldEmoji} ${theme.name} (${oldPercent}%)
+            </div>
+          </div>
+          <div class="new-system">
+            <div class="score-row ${emojiChanged ? 'precision-gain' : ''}">
+              ${newEmoji} ${theme.name} (${newPercent}%)
+            </div>
+          </div>
+        `;
+        
+        impact.appendChild(themeDiv);
+        
+        if (emojiChanged) {
+          const changeDiv = document.createElement('div');
+          changeDiv.style.textAlign = 'center';
+          changeDiv.style.color = '#28a745';
+          changeDiv.style.fontWeight = 'bold';
+          changeDiv.style.margin = '5px 0';
+          changeDiv.innerHTML = `✅ Changement d'emoji : niveau plus précis !`;
+          impact.appendChild(changeDiv);
+        }
+      });
+    }
+
+    // Auto-test au chargement
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('🎯 Page de test des scores précis chargée');
+    });
+  </script>
+</body>
+</html>
