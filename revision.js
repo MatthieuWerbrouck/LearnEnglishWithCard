@@ -38,17 +38,18 @@ function setThemeScores(scores) {
 }
 
 /**
- * Récupère le score d'un thème spécifique
+ * Récupère le score d'un thème pour un type d'évaluation spécifique
  * @param {string} lang - Langue du thème
  * @param {string} theme - Nom du thème
+ * @param {string} evaluationType - Type d'évaluation ('revision', 'qcm_fr_lang', 'qcm_lang_fr', 'libre')
  * @returns {number|null} Score sur 10 ou null si pas de score
  */
-function getScoreForTheme(lang, theme) {
+function getScoreForTheme(lang, theme, evaluationType = 'revision') {
   try {
     const scores = getThemeScores();
     if (!scores || typeof scores !== 'object') return null;
     
-    const key = `${lang}:${theme}`;
+    const key = `${lang}:${theme}:${evaluationType}`;
     const themeData = scores[key];
     
     if (!themeData || typeof themeData !== 'object') return null;
@@ -67,11 +68,12 @@ function getScoreForTheme(lang, theme) {
  * @param {string} lang - Langue du thème
  * @param {string} theme - Nom du thème
  * @param {boolean} isGood - true si bonne réponse, false sinon
+ * @param {string} evaluationType - Type d'évaluation ('revision', 'qcm_fr_lang', 'qcm_lang_fr', 'libre')
  */
-function updateScoreForTheme(lang, theme, isGood) {
+function updateScoreForTheme(lang, theme, isGood, evaluationType = 'revision') {
   try {
     const scores = getThemeScores() || {}; // Assure qu'on a un objet
-    const key = `${lang}:${theme}`;
+    const key = `${lang}:${theme}:${evaluationType}`;
     
     // Initialisation robuste de l'objet score
     if (!scores[key]) {
@@ -168,6 +170,57 @@ function migrateToPreciseScores() {
     
   } catch (error) {
     console.error('❌ [Migration] Erreur lors de la migration:', error);
+    return 0;
+  }
+}
+
+/**
+ * Migre les anciens scores vers la nouvelle structure avec types d'évaluation
+ * Convertit les clés "lang:theme" vers "lang:theme:revision"
+ */
+function migrateToEvaluationTypes() {
+  try {
+    const scores = getThemeScores();
+    if (!scores || typeof scores !== 'object') {
+      console.log('ℹ️ [Migration Types] Aucun score à migrer');
+      return 0;
+    }
+    
+    let migratedCount = 0;
+    const newScores = {};
+    
+    // Copie les nouveaux scores (avec types) s'ils existent déjà
+    Object.keys(scores).forEach(key => {
+      if (key.split(':').length === 3) {
+        newScores[key] = scores[key];
+      }
+    });
+    
+    // Migre les anciens scores (sans types)
+    Object.keys(scores).forEach(key => {
+      if (key.split(':').length === 2) {
+        const newKey = `${key}:revision`;
+        
+        // Ne migre que s'il n'existe pas déjà avec le nouveau format
+        if (!newScores[newKey]) {
+          newScores[newKey] = scores[key];
+          migratedCount++;
+          console.log(`🔄 [Migration Types] ${key} → ${newKey}`);
+        }
+      }
+    });
+    
+    if (migratedCount > 0) {
+      setThemeScores(newScores);
+      console.log(`✅ [Migration Types] ${migratedCount} scores migrés vers la nouvelle structure`);
+    } else {
+      console.log('ℹ️ [Migration Types] Aucun score nécessitant une migration trouvé');
+    }
+    
+    return migratedCount;
+    
+  } catch (error) {
+    console.error('❌ [Migration Types] Erreur lors de la migration:', error);
     return 0;
   }
 }
@@ -326,6 +379,11 @@ document.addEventListener('DOMContentLoaded', function() {
       
       allLangs = Object.keys(dataByLang);
       console.log(`🌍 [Revision] ${allLangs.length} langues disponibles:`, allLangs);
+      
+      // Migration des scores vers la nouvelle structure
+      console.log('🔄 [Revision] Démarrage des migrations...');
+      migrateToPreciseScores();
+      migrateToEvaluationTypes();
       
       // Affichage de la sélection des langues
       showLangSelection();
@@ -968,8 +1026,8 @@ function handleUserFeedback(isKnown) {
     }, 100);
   }
   
-  // Mise à jour du score du thème
-  updateScoreForTheme(selectedLang, currentTheme, isKnown);
+  // Mise à jour du score du thème (type 'revision')
+  updateScoreForTheme(selectedLang, currentTheme, isKnown, 'revision');
   
   // Feedback visuel avec animation
   const feedbackMsg = isKnown ? 

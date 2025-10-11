@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧪 Test des Scores Indépendants - Polyglot Flashcards</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="dom-utils.js"></script>
+  <script src="revision.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <h1 style="font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 8px;">
+        🧪 Test des Scores Indépendants
+      </h1>
+      <p style="color: #6b7280; font-size: 1rem;">Vérification de l'indépendance des scores par type d'évaluation</p>
+    </div>
+
+    <!-- Section de test -->
+    <div style="background: #f8f9fa; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+      <h2 style="color: #374151; margin-bottom: 16px;">🔬 Simulation de Scores</h2>
+      
+      <div style="margin-bottom: 16px;">
+        <label for="testLang" style="display: block; margin-bottom: 8px; font-weight: 500;">Langue de test:</label>
+        <select id="testLang" class="form-input" style="width: 200px;">
+          <option value="anglais">Anglais</option>
+          <option value="espagnol">Espagnol</option>
+          <option value="allemand">Allemand</option>
+        </select>
+      </div>
+      
+      <div style="margin-bottom: 16px;">
+        <label for="testTheme" style="display: block; margin-bottom: 8px; font-weight: 500;">Thème de test:</label>
+        <input type="text" id="testTheme" class="form-input" value="test_scores" style="width: 200px;">
+      </div>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px;">
+        <button onclick="simulateScoreUpdate('revision', true)" class="success-btn">
+          📚 Révision ✅
+        </button>
+        <button onclick="simulateScoreUpdate('revision', false)" class="danger-btn">
+          📚 Révision ❌
+        </button>
+        <button onclick="simulateScoreUpdate('qcm_fr_lang', true)" class="success-btn">
+          🇫🇷→🌍 QCM ✅
+        </button>
+        <button onclick="simulateScoreUpdate('qcm_fr_lang', false)" class="danger-btn">
+          🇫🇷→🌍 QCM ❌
+        </button>
+        <button onclick="simulateScoreUpdate('qcm_lang_fr', true)" class="success-btn">
+          🌍→🇫🇷 QCM ✅
+        </button>
+        <button onclick="simulateScoreUpdate('qcm_lang_fr', false)" class="danger-btn">
+          🌍→🇫🇷 QCM ❌
+        </button>
+        <button onclick="simulateScoreUpdate('libre', true)" class="success-btn">
+          ✍️ Libre ✅
+        </button>
+        <button onclick="simulateScoreUpdate('libre', false)" class="danger-btn">
+          ✍️ Libre ❌
+        </button>
+      </div>
+      
+      <div style="text-align: center; margin-top: 16px;">
+        <button onclick="clearAllScores()" class="nav-btn" style="background: #dc3545; color: white;">
+          🗑️ Effacer tous les scores de test
+        </button>
+      </div>
+    </div>
+
+    <!-- Affichage des résultats -->
+    <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 24px;">
+      <h2 style="color: #374151; margin-bottom: 16px;">📊 Scores Actuels</h2>
+      <div id="scoresDisplay" style="font-family: 'Courier New', monospace; background: #f1f3f4; padding: 16px; border-radius: 8px; white-space: pre-line;">
+        Cliquez sur "Actualiser" pour voir les scores...
+      </div>
+      <button onclick="refreshScores()" class="main-btn" style="margin-top: 16px;">
+        🔄 Actualiser
+      </button>
+    </div>
+
+    <!-- Instructions -->
+    <div style="background: #e3f2fd; border-radius: 12px; padding: 20px; margin-top: 24px;">
+      <h3 style="color: #1565c0; margin-bottom: 12px;">📋 Instructions du Test</h3>
+      <ol style="color: #1976d2; line-height: 1.6;">
+        <li>Cliquez sur les boutons ✅/❌ pour simuler des réponses correctes/incorrectes</li>
+        <li>Observez que chaque type d'évaluation maintient son score indépendant</li>
+        <li>Vérifiez que les scores de "Révision" et "QCM" ne s'influencent pas mutuellement</li>
+        <li>Testez avec différentes langues et thèmes</li>
+        <li>Utilisez "Actualiser" pour voir les derniers scores</li>
+      </ol>
+    </div>
+
+    <div style="text-align: center; margin-top: 32px;">
+      <button onclick="window.location.href='index.html'" class="nav-btn">🏠 Retour à l'accueil</button>
+    </div>
+  </div>
+
+  <script>
+    // Fonctions de test
+    function simulateScoreUpdate(evaluationType, isGood) {
+      const lang = document.getElementById('testLang').value;
+      const theme = document.getElementById('testTheme').value;
+      
+      if (!lang || !theme) {
+        alert('Veuillez sélectionner une langue et saisir un thème');
+        return;
+      }
+      
+      try {
+        // Utilise la fonction updateScoreForTheme avec le type d'évaluation
+        updateScoreForTheme(lang, theme, isGood, evaluationType);
+        
+        const emoji = isGood ? '✅' : '❌';
+        const result = isGood ? 'Correct' : 'Incorrect';
+        console.log(`${emoji} [Test] ${evaluationType}: ${lang}/${theme} - ${result}`);
+        
+        // Actualise automatiquement l'affichage
+        setTimeout(refreshScores, 100);
+        
+      } catch (error) {
+        console.error('Erreur lors de la simulation:', error);
+        alert('Erreur: ' + error.message);
+      }
+    }
+    
+    function refreshScores() {
+      const lang = document.getElementById('testLang').value;
+      const theme = document.getElementById('testTheme').value;
+      const display = document.getElementById('scoresDisplay');
+      
+      if (!lang || !theme) {
+        display.textContent = 'Veuillez sélectionner une langue et saisir un thème';
+        return;
+      }
+      
+      try {
+        const types = ['revision', 'qcm_fr_lang', 'qcm_lang_fr', 'libre'];
+        const typeNames = {
+          'revision': '📚 Révision',
+          'qcm_fr_lang': '🇫🇷→🌍 QCM',
+          'qcm_lang_fr': '🌍→🇫🇷 QCM',
+          'libre': '✍️ Libre'
+        };
+        
+        let result = `Scores pour "${lang}" - Thème "${theme}":\n\n`;
+        
+        types.forEach(type => {
+          const score = getScoreForTheme(lang, theme, type);
+          const name = typeNames[type];
+          
+          if (score !== null) {
+            const percentage = ((score / 10) * 100).toFixed(2);
+            result += `${name}: ${score.toFixed(3)}/10 (${percentage}%)\n`;
+          } else {
+            result += `${name}: Aucun score\n`;
+          }
+        });
+        
+        // Affiche aussi la structure de stockage interne
+        result += '\n--- Structure de stockage ---\n';
+        const scores = getThemeScores() || {};
+        types.forEach(type => {
+          const key = `${lang}:${theme}:${type}`;
+          if (scores[key]) {
+            const data = scores[key];
+            result += `${key}:\n`;
+            result += `  Histoire: [${data.history ? data.history.join(', ') : 'vide'}]\n`;
+            result += `  Score: ${data.score || 'N/A'}\n`;
+          }
+        });
+        
+        display.textContent = result;
+        
+      } catch (error) {
+        display.textContent = 'Erreur: ' + error.message;
+        console.error('Erreur lors de la récupération des scores:', error);
+      }
+    }
+    
+    function clearAllScores() {
+      if (!confirm('Êtes-vous sûr de vouloir effacer TOUS les scores de test ?')) {
+        return;
+      }
+      
+      try {
+        const lang = document.getElementById('testLang').value;
+        const theme = document.getElementById('testTheme').value;
+        const scores = getThemeScores() || {};
+        
+        const types = ['revision', 'qcm_fr_lang', 'qcm_lang_fr', 'libre'];
+        types.forEach(type => {
+          const key = `${lang}:${theme}:${type}`;
+          delete scores[key];
+        });
+        
+        setThemeScores(scores);
+        console.log('🗑️ [Test] Scores de test effacés');
+        
+        setTimeout(refreshScores, 100);
+        
+      } catch (error) {
+        console.error('Erreur lors de l\'effacement:', error);
+        alert('Erreur: ' + error.message);
+      }
+    }
+    
+    // Initialisation
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('🧪 [Test] Page de test des scores indépendants chargée');
+      
+      // Test rapide des fonctions
+      if (typeof updateScoreForTheme === 'function' && typeof getScoreForTheme === 'function') {
+        console.log('✅ [Test] Fonctions de scoring disponibles');
+      } else {
+        console.error('❌ [Test] Fonctions de scoring manquantes');
+        document.getElementById('scoresDisplay').textContent = 
+          'Erreur: Les fonctions de scoring ne sont pas disponibles.\nVérifiez que revision.js est chargé correctement.';
+      }
+    });
+  </script>
+</body>
+</html>

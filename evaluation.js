@@ -11,6 +11,35 @@ const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes en millisecondes
 const CACHE_KEY = 'sheetDB_cache';
 const CACHE_TIMESTAMP_KEY = 'sheetDB_cache_timestamp';
 
+// Type d'évaluation à afficher dans les scores (par défaut: mode actuel d'évaluation)
+let displayedScoreType = null;
+
+/**
+ * Obtient le type d'évaluation à utiliser pour l'affichage des scores
+ * @returns {string} Type d'évaluation ('revision', 'qcm_fr_lang', 'qcm_lang_fr', 'libre')
+ */
+function getDisplayedScoreType() {
+  // Si un type spécifique est sélectionné, l'utiliser
+  if (displayedScoreType) return displayedScoreType;
+  
+  // Sinon, utiliser le mode d'évaluation actuel ou 'revision' par défaut
+  return window.selectedEvalMode || 'revision';
+}
+
+/**
+ * Change le type d'évaluation affiché dans les scores
+ * @param {string} evaluationType - Type d'évaluation à afficher
+ */
+function setDisplayedScoreType(evaluationType) {
+  displayedScoreType = evaluationType;
+  console.log(`📊 [Evaluation] Type de score affiché: ${evaluationType}`);
+  
+  // Recharge l'affichage des thèmes si on est sur cette page
+  if (typeof displayThemeList === 'function' && window.selectedLang) {
+    displayThemeList(window.selectedLang);
+  }
+}
+
 // ================================
 // SYSTÈME DE SCORING ET PERSISTANCE
 // ================================
@@ -57,12 +86,13 @@ function scoreToPercentage(score, precision = 2) {
  * Récupère le score d'un thème avec différents formats d'affichage
  * @param {string} language - Langue du thème
  * @param {string} theme - Nom du thème
+ * @param {string} evaluationType - Type d'évaluation ('revision', 'qcm_fr_lang', 'qcm_lang_fr', 'libre')
  * @returns {Object|null} Objet avec les différents formats de score
  */
-function getThemeScoreFormats(language, theme) {
+function getThemeScoreFormats(language, theme, evaluationType = 'revision') {
   if (typeof getScoreForTheme !== 'function') return null;
   
-  const rawScore = getScoreForTheme(language, theme);
+  const rawScore = getScoreForTheme(language, theme, evaluationType);
   if (rawScore === null) return null;
   
   return {
@@ -346,7 +376,8 @@ function syncWithRevisionScores(results, language) {
   try {
     // Utilise les fonctions de revision.js si disponibles
     if (typeof getThemeScores === 'function' && typeof updateScoreForTheme === 'function') {
-      console.log('🔗 [Evaluation] Synchronisation avec le système de révision');
+      const evaluationType = window.selectedEvalMode || 'libre';
+      console.log(`🔗 [Evaluation] Synchronisation des scores (type: ${evaluationType})`);
       
       // Groupe les résultats par thème
       const themeResults = {};
@@ -360,16 +391,16 @@ function syncWithRevisionScores(results, language) {
         themeResults[theme].push(result.isCorrect);
       });
       
-      // Met à jour les scores de révision pour chaque thème
+      // Met à jour les scores pour chaque thème avec le type d'évaluation approprié
       Object.keys(themeResults).forEach(theme => {
         const themeAnswers = themeResults[theme];
         
         // Calcule le taux de réussite pour ce thème dans cette évaluation
         const successRate = themeAnswers.filter(correct => correct).length / themeAnswers.length;
         
-        // Met à jour plusieurs fois selon le nombre de questions pour avoir un impact
+        // Met à jour les scores avec le type d'évaluation en cours
         themeAnswers.forEach(isCorrect => {
-          updateScoreForTheme(language, theme, isCorrect);
+          updateScoreForTheme(language, theme, isCorrect, evaluationType);
         });
         
         console.log(`📊 [Sync] Thème "${theme}": ${calculatePrecisePercentage(themeData.correct, themeData.total, 2)}% de réussite (précis: ${calculatePrecisePercentage(themeData.correct, themeData.total, 4)}%)`);
@@ -643,11 +674,40 @@ window.addEventListener('DOMContentLoaded', function() {
       }
     });
     
+    // Sélecteur pour le type d'évaluation affiché
+    const scoreTypeSelect = DOMUtils.createSafeElement('select', {
+      className: 'form-input',
+      style: {
+        fontSize: '0.85em',
+        padding: '6px 8px',
+        minWidth: '140px'
+      }
+    });
+    
+    const scoreTypeOptions = [
+      { value: 'revision', text: '📚 Révision' },
+      { value: 'qcm_fr_lang', text: '🇫🇷→🌍 QCM' },
+      { value: 'qcm_lang_fr', text: '🌍→🇫🇷 QCM' },
+      { value: 'libre', text: '✍️ Libre' }
+    ];
+    
+    scoreTypeOptions.forEach(option => {
+      const optionEl = DOMUtils.createSafeElement('option', {
+        textContent: option.text,
+        attributes: { value: option.value }
+      });
+      if (option.value === getDisplayedScoreType()) {
+        optionEl.selected = true;
+      }
+      scoreTypeSelect.appendChild(optionEl);
+    });
+    
     // Variable pour tracker le mode d'affichage (true = pourcentage, false = sur 10)
     let displayAsPercentage = true;
     
     controlsContainer.appendChild(searchInput);
     controlsContainer.appendChild(scoreDisplayBtn);
+    controlsContainer.appendChild(scoreTypeSelect);
     themeDiv.appendChild(controlsContainer);
 
     // Légende des couleurs
@@ -686,8 +746,8 @@ window.addEventListener('DOMContentLoaded', function() {
     // Trie les thèmes par performance (ordre croissant - les plus faibles en premier)
     const themes = rawThemes.sort((themeA, themeB) => {
       // Utilise les scores formatés pour un tri cohérent
-      const scoreDataA = getThemeScoreFormats(window.selectedLang, themeA);
-      const scoreDataB = getThemeScoreFormats(window.selectedLang, themeB);
+      const scoreDataA = getThemeScoreFormats(window.selectedLang, themeA, getDisplayedScoreType());
+      const scoreDataB = getThemeScoreFormats(window.selectedLang, themeB, getDisplayedScoreType());
       
       // Les thèmes sans score (null) sont placés en premier (priorité max)
       if (!scoreDataA && !scoreDataB) return themeA.localeCompare(themeB);
@@ -699,7 +759,7 @@ window.addEventListener('DOMContentLoaded', function() {
     });
     
     console.log('📊 [Evaluation] Thèmes triés par performance:', themes.map(theme => {
-      const scoreData = getThemeScoreFormats(window.selectedLang, theme);
+      const scoreData = getThemeScoreFormats(window.selectedLang, theme, getDisplayedScoreType());
       return scoreData ? 
         `${theme} (${scoreData.percentage}% - ${scoreData.outOf10}/10)` : 
         `${theme} (nouveau)`;
@@ -738,7 +798,7 @@ window.addEventListener('DOMContentLoaded', function() {
         ).length;
         
         // Récupère le score du thème avec différents formats
-        const themeScoreData = getThemeScoreFormats(window.selectedLang, theme);
+        const themeScoreData = getThemeScoreFormats(window.selectedLang, theme, getDisplayedScoreType());
         
         // Construit le tooltip avec mots + note
         let tooltipText = `${wordCount} mot${wordCount > 1 ? 's' : ''} dans ce thème`;
@@ -838,6 +898,16 @@ window.addEventListener('DOMContentLoaded', function() {
       scoreDisplayBtn.textContent = displayAsPercentage ? '📊 % → /10' : '📊 /10 → %';
       
       // Re-rend les thèmes avec le nouveau format
+      const currentSearch = searchInput.value.trim().toLowerCase();
+      const filtered = themes.filter(theme => theme.toLowerCase().includes(currentSearch));
+      renderThemeCheckboxes(filtered);
+    };
+    
+    // Change le type d'évaluation affiché dans les scores
+    scoreTypeSelect.onchange = function() {
+      setDisplayedScoreType(scoreTypeSelect.value);
+      
+      // Re-rend les thèmes avec le nouveau type de score
       const currentSearch = searchInput.value.trim().toLowerCase();
       const filtered = themes.filter(theme => theme.toLowerCase().includes(currentSearch));
       renderThemeCheckboxes(filtered);
