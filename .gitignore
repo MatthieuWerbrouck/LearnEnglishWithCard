@@ -1,5 +1,25 @@
+# Fichiers d'audit et de debug (temporaires)
 AUDIT-REPORT.md
+BUGFIX-REPORT.md
+CANCEL_BUTTON_FIX.md
+DEDUPLICATION-REPORT.md
+SCORES_DISPLAY_FIX.md
+THEME-SORTING-FEATURE.md
+
+# Scripts de développement temporaires
 syntax_check.ps1
-evaluation.js.backup
 syntax_check.js
 analyze-braces.ps1
+demo-precision.ps1
+
+# Fichiers de sauvegarde
+evaluation.js.backup
+*.backup
+*.old
+
+# Tests de debug temporaires
+test_cancel_button.html
+test_cancel_debug.js
+test_correction_qcm.js
+test_deduplication.js
+test_theme_sorting.js

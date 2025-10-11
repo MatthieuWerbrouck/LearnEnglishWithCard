@@ -1,6 +1,4 @@
-// Toute la nouvelle logique d'évaluation doit être écrite ici.
-// Ne pas utiliser evaluation.old.js dans le code actif.
-// Utilisez-le uniquement pour consultation ou inspiration.
+// Système d'évaluation interactive pour l'apprentissage des langues
 
 // Nouvelle logique d'évaluation - étape 1 : sélection dynamique de la langue
 // Système de cache optimisé pour limiter les appels à SheetDB
@@ -1143,10 +1141,11 @@ function prepareEvaluationData() {
   let langKey = window.selectedLang === 'anglais' ? 'en' : 
                (window.selectedLang === 'japonais' ? 'ja' : window.selectedLang);
   
-  // Debug: affichons la structure des données
-  console.log('Données SheetDB:', sheetDBData ? sheetDBData.slice(0, 2) : 'null');
-  console.log('Langue sélectionnée:', window.selectedLang, '→ clé:', langKey);
-  console.log('Thèmes sélectionnés:', window.selectedThemes);
+  // Validation des données
+  if (!sheetDBData) {
+    console.error('❌ Données SheetDB non disponibles');
+    return;
+  }
   
   // Filtre les cartes selon les thèmes sélectionnés et la langue
   const filteredCards = sheetDBData.filter(card => {
@@ -1383,13 +1382,8 @@ function initEvaluationInterface() {
   
   cancelDiv.appendChild(cancelBtn);
   
-  console.log('🔨 [Debug] Bouton d\'annulation créé avec ID:', cancelBtn.id);
-  
   // Event listener principal avec addEventListener (plus fiable)
   cancelBtn.addEventListener('click', function(e) {
-    console.log('🖱️ [Debug] Clic détecté sur le bouton d\'annulation');
-    console.log('🔍 [Debug] Fonction cancelEvaluation disponible:', typeof cancelEvaluation);
-    console.log('🎯 [Debug] Event details:', e);
     
     // Empêche la propagation et le comportement par défaut
     e.preventDefault();
@@ -1398,18 +1392,15 @@ function initEvaluationInterface() {
     try {
       cancelEvaluation();
     } catch (error) {
-      console.error('❌ [Debug] Erreur lors de l\'exécution de cancelEvaluation:', error);
+      console.error('❌ Erreur lors de l\'exécution de cancelEvaluation:', error);
       alert('Erreur: ' + error.message);
     }
   });
   
   // Event listener de secours avec onclick
   cancelBtn.onclick = function(e) {
-    console.log('🎯 [Debug] Onclick event listener activé en secours');
     return false; // Pour empêcher le comportement par défaut
   };
-  
-  console.log('🔨 [Debug] Event listeners attachés au bouton');
   
   evalDiv.appendChild(questionCard);
   evalDiv.appendChild(answerSection);
@@ -1420,12 +1411,11 @@ function initEvaluationInterface() {
   parent.appendChild(evalDiv);
   
   // Vérification post-création que le bouton est bien dans le DOM
+  // Vérification que le bouton est bien dans le DOM
   setTimeout(() => {
     const btnCheck = document.getElementById('cancelEvalBtn');
-    console.log('✅ [Debug] Vérification bouton dans DOM:', btnCheck ? 'TROUVÉ' : 'NON TROUVÉ');
-    if (btnCheck) {
-      console.log('✅ [Debug] Style du bouton:', window.getComputedStyle(btnCheck).display);
-      console.log('✅ [Debug] Position du bouton:', btnCheck.getBoundingClientRect());
+    if (!btnCheck) {
+      console.warn('⚠️ Bouton d\'annulation non trouvé dans le DOM');
     }
   }, 100);
 }
@@ -2023,15 +2013,11 @@ window.testCancelButton = function() {
 };
 
 function cancelEvaluation() {
-  console.log('🚀 [Debug] Fonction cancelEvaluation() appelée');
-  
   // Demande confirmation avant d'annuler
   const confirmCancel = confirm(
     '⚠️ Êtes-vous sûr de vouloir annuler l\'évaluation ?\n\n' +
     'Votre progression actuelle sera perdue.'
   );
-  
-  console.log('🤔 [Debug] Réponse de confirmation:', confirmCancel);
   
   if (confirmCancel) {
     // Supprime l'interface d'évaluation
@@ -2288,10 +2274,11 @@ function migrateScoresToPrecision() {
 function runDiagnosticTests() {
   console.group('🔧 TESTS DIAGNOSTICS');
   
-  // Test localStorage
+  // Vérification localStorage
   try {
-    localStorage.setItem('test_key', 'test_value');
-    localStorage.removeItem('test_key');
+    const testKey = '__ls_test__';
+    localStorage.setItem(testKey, '1');
+    localStorage.removeItem(testKey);
     console.log('✅ localStorage: OK');
   } catch (error) {
     console.error('❌ localStorage: ERREUR', error);
